@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, inArray } from "drizzle-orm";
 import type { AppEnv } from "../types";
 import { withUserContext } from "../db/withUserContext";
 import * as schema from "../db/schema";
@@ -127,6 +127,23 @@ ingestRoutes.post("/flags/:id/acknowledge", async (c) => {
       .where(eq(schema.ingestionFlags.id, id)),
   );
   return c.json({ ok: true });
+});
+
+/** Bulk-acknowledge a set of flags in one request — e.g. "Acknowledge all" per screening-report group. */
+ingestRoutes.post("/flags/acknowledge", async (c) => {
+  const userId = c.get("userId");
+  const body = await c.req.json<{ ids: string[] }>().catch(() => null);
+  const ids = body?.ids?.filter((id): id is string => typeof id === "string") ?? [];
+  if (ids.length === 0) return c.json({ error: "ids required" }, 400);
+
+  await withUserContext(userId, (tx) =>
+    tx
+      .update(schema.ingestionFlags)
+      .set({ resolutionStatus: "acknowledged" })
+      .where(and(inArray(schema.ingestionFlags.id, ids), eq(schema.ingestionFlags.userId, userId))),
+  );
+
+  return c.json({ ok: true, count: ids.length });
 });
 
 ingestRoutes.post("/flags/:id/exclude", async (c) => {

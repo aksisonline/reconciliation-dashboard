@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { CheckCircle2, Download, FileWarning, Trash2, Upload as UploadIcon } from "lucide-react";
+import { CheckCheck, Download, FileWarning, MoreHorizontal, Trash2, Upload as UploadIcon } from "lucide-react";
 import { AuthGuard } from "#/components/auth-guard";
 import { Button } from "#/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -15,6 +16,12 @@ import {
 import { Badge } from "#/components/ui/badge";
 import { Separator } from "#/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "#/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { CompareRowsDialog } from "#/components/compare-rows-dialog";
 import { api, ApiError } from "#/lib/api";
@@ -89,6 +96,13 @@ function UploadPage() {
     await api.post(`/api/ingest/flags/${id}/${action}`);
     await refreshFlags();
     toast.success(action === "acknowledge" ? "Flag acknowledged." : "Row excluded from reconciliation.");
+  }
+
+  async function acknowledgeAll(ids: string[]) {
+    if (ids.length === 0) return;
+    await api.post("/api/ingest/flags/acknowledge", { ids });
+    await refreshFlags();
+    toast.success(`Acknowledged ${ids.length} flag${ids.length === 1 ? "" : "s"}.`);
   }
 
   async function handleClear() {
@@ -180,11 +194,23 @@ function UploadPage() {
                 ? `${openCount} issue${openCount === 1 ? "" : "s"} to review. These never block reconciliation — acknowledge or exclude what you want to handle.`
                 : "All flags reviewed."}
             </CardDescription>
+            {openCount > 0 && (
+              <CardAction>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => acknowledgeAll(flags.filter((f) => f.resolutionStatus === "open").map((f) => f.id))}
+                >
+                  <CheckCheck /> Acknowledge all ({openCount})
+                </Button>
+              </CardAction>
+            )}
           </CardHeader>
           <CardContent>
             <Accordion type="multiple" className="w-full" defaultValue={Object.keys(grouped)}>
               {Object.entries(grouped).map(([type, group]) => {
                 const copy = FLAG_COPY[type] ?? { label: type, description: "", tone: "info" as const };
+                const openIds = group.filter((f) => f.resolutionStatus === "open").map((f) => f.id);
                 return (
                   <AccordionItem key={type} value={type}>
                     <AccordionTrigger>
@@ -194,7 +220,19 @@ function UploadPage() {
                       </span>
                     </AccordionTrigger>
                     <AccordionContent className="flex flex-col gap-3">
-                      <p className="text-sm text-muted-foreground">{copy.description}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm text-muted-foreground">{copy.description}</p>
+                        {openIds.length > 1 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="shrink-0 text-muted-foreground"
+                            onClick={() => acknowledgeAll(openIds)}
+                          >
+                            <CheckCheck /> Acknowledge all {openIds.length}
+                          </Button>
+                        )}
+                      </div>
                       <ul className="flex flex-col gap-2">
                         {group.map((flag) => (
                           <li
@@ -203,7 +241,7 @@ function UploadPage() {
                           >
                             <FlagDetail flag={flag} />
                             <span className="flex shrink-0 flex-wrap items-center gap-1">
-                              {isGroupFlag(flag.flagType) && (
+                              {isGroupFlag(flag.flagType) ? (
                                 <CompareRowsDialog
                                   flagId={flag.id}
                                   label={copy.label}
@@ -212,18 +250,22 @@ function UploadPage() {
                                     refreshStatus();
                                   }}
                                 />
-                              )}
-                              {flag.resolutionStatus === "open" ? (
-                                <>
-                                  <Button size="sm" variant="outline" onClick={() => actOnFlag(flag.id, "acknowledge")}>
-                                    <CheckCircle2 /> Acknowledge
-                                  </Button>
-                                  {!isGroupFlag(flag.flagType) && (
-                                    <Button size="sm" variant="ghost" onClick={() => actOnFlag(flag.id, "exclude")}>
-                                      Exclude
+                              ) : flag.resolutionStatus === "open" ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="icon-sm" variant="ghost">
+                                      <MoreHorizontal />
                                     </Button>
-                                  )}
-                                </>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => actOnFlag(flag.id, "acknowledge")}>
+                                      Acknowledge
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => actOnFlag(flag.id, "exclude")}>
+                                      Exclude from reconciliation
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               ) : (
                                 <Badge variant="outline" className="capitalize">
                                   {flag.resolutionStatus}

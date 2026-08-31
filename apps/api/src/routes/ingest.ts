@@ -91,6 +91,32 @@ ingestRoutes.get("/flags/:id/rows", async (c) => {
   return c.json(result);
 });
 
+/**
+ * Direct per-row include/exclude, keyed by the actual order/payment row id
+ * rather than a flag's shared key. This is what lets the Compare rows view
+ * offer a checkbox per row instead of an all-or-nothing group toggle —
+ * e.g. keeping one payment in a charge+refund pair while excluding the
+ * other duplicate charge.
+ */
+ingestRoutes.post("/rows/:source/:id", async (c) => {
+  const userId = c.get("userId");
+  const source = c.req.param("source");
+  const id = c.req.param("id");
+  const body = await c.req.json<{ isExcluded: boolean }>().catch(() => null);
+  if (source !== "orders" && source !== "payments") return c.json({ error: "invalid source" }, 400);
+  if (typeof body?.isExcluded !== "boolean") return c.json({ error: "isExcluded (boolean) required" }, 400);
+
+  const table = source === "orders" ? schema.orders : schema.payments;
+  await withUserContext(userId, (tx) =>
+    tx
+      .update(table)
+      .set({ isExcluded: body.isExcluded })
+      .where(and(eq(table.id, id), eq(table.userId, userId))),
+  );
+
+  return c.json({ ok: true });
+});
+
 ingestRoutes.post("/flags/:id/acknowledge", async (c) => {
   const userId = c.get("userId");
   const id = c.req.param("id");

@@ -34,8 +34,8 @@ export type DashboardSummary = {
   byType: Record<string, { count: number; amountAtRisk: number }>;
 };
 
-export type OrderRecord = Record<string, unknown> & { id: string; orderId: string };
-export type PaymentRecord = Record<string, unknown> & { id: string; transactionRef: string };
+export type OrderRecord = Record<string, unknown> & { id: string; orderId: string; isExcluded: boolean };
+export type PaymentRecord = Record<string, unknown> & { id: string; transactionRef: string; isExcluded: boolean };
 
 export type Discrepancy = {
   id: string;

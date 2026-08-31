@@ -203,17 +203,26 @@ function UploadPage() {
                           >
                             <FlagDetail flag={flag} />
                             <span className="flex shrink-0 flex-wrap items-center gap-1">
-                              {(flag.flagType === "DUPLICATE_KEY" || flag.flagType === "MULTIPLE_PAYMENTS_FOR_ORDER") && (
-                                <CompareRowsDialog flagId={flag.id} label={copy.label} />
+                              {isGroupFlag(flag.flagType) && (
+                                <CompareRowsDialog
+                                  flagId={flag.id}
+                                  label={copy.label}
+                                  onApplied={() => {
+                                    refreshFlags();
+                                    refreshStatus();
+                                  }}
+                                />
                               )}
                               {flag.resolutionStatus === "open" ? (
                                 <>
                                   <Button size="sm" variant="outline" onClick={() => actOnFlag(flag.id, "acknowledge")}>
                                     <CheckCircle2 /> Acknowledge
                                   </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => actOnFlag(flag.id, "exclude")}>
-                                    Exclude
-                                  </Button>
+                                  {!isGroupFlag(flag.flagType) && (
+                                    <Button size="sm" variant="ghost" onClick={() => actOnFlag(flag.id, "exclude")}>
+                                      Exclude
+                                    </Button>
+                                  )}
                                 </>
                               ) : (
                                 <Badge variant="outline" className="capitalize">
@@ -318,6 +327,11 @@ function FileField({
       {file && <span className="text-xs text-muted-foreground">{file.name}</span>}
     </div>
   );
+}
+
+/** Flag types that represent a group of 2+ rows worth comparing side by side. */
+function isGroupFlag(flagType: string) {
+  return flagType === "DUPLICATE_KEY" || flagType === "MULTIPLE_PAYMENTS_FOR_ORDER";
 }
 
 function groupByType(flags: IngestionFlag[]) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { AlertTriangle, ArrowRight, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, RefreshCcw, ShieldCheck } from "lucide-react";
 import { AuthGuard } from "#/components/auth-guard";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "#/components/ui/card";
 import { Button } from "#/components/ui/button";
@@ -11,7 +11,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "#/components/ui/chart";
 import { api, ApiError } from "#/lib/api";
 import { DISCREPANCY_COPY } from "#/lib/copy";
-import type { DashboardSummary } from "#/lib/types";
+import type { DashboardSummary, DataStatus } from "#/lib/types";
 
 export const Route = createFileRoute("/dashboard")({
   component: () => (
@@ -27,14 +27,34 @@ const chartConfig = {
 
 function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [status, setStatus] = useState<DataStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reconciling, setReconciling] = useState(false);
 
   useEffect(() => {
-    api
-      .get<DashboardSummary>("/api/dashboard/summary")
-      .then(setSummary)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load dashboard."));
+    load();
   }, []);
+
+  function load() {
+    Promise.all([api.get<DashboardSummary>("/api/dashboard/summary"), api.get<DataStatus>("/api/data/status")])
+      .then(([s, st]) => {
+        setSummary(s);
+        setStatus(st);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load dashboard."));
+  }
+
+  async function runReconciliation() {
+    setReconciling(true);
+    try {
+      await api.post("/api/reconcile/run");
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Reconciliation failed to run.");
+    } finally {
+      setReconciling(false);
+    }
+  }
 
   if (error) {
     return (
@@ -50,7 +70,7 @@ function Dashboard() {
     );
   }
 
-  if (!summary) {
+  if (!summary || !status) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -61,6 +81,9 @@ function Dashboard() {
   }
 
   const noData = summary.totalOrders === 0 && summary.totalPayments === 0;
+  const lastUpload = [status.orders.lastUpload, status.payments.lastUpload].filter(Boolean).sort().at(-1) ?? null;
+  const needsReconciliation =
+    !noData && (status.reconciliations.lastRun === null || (lastUpload !== null && status.reconciliations.lastRun < lastUpload));
   const chartData = Object.entries(summary.byType)
     .map(([type, v]) => ({
       type,
@@ -85,6 +108,32 @@ function Dashboard() {
             Upload data <ArrowRight />
           </Link>
         </Button>
+      </Empty>
+    );
+  }
+
+  if (needsReconciliation) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <RefreshCcw />
+          </EmptyMedia>
+          <EmptyTitle>Reconciliation hasn't run yet</EmptyTitle>
+          <EmptyDescription>
+            {status.orders.count.toLocaleString()} orders and {status.payments.count.toLocaleString()} payments are
+            loaded{status.reconciliations.lastRun ? ", but there's newer data than the last run" : ""}. Run
+            reconciliation to see results here, or go back and review the screening report first.
+          </EmptyDescription>
+        </EmptyHeader>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/upload">Review screening report</Link>
+          </Button>
+          <Button onClick={runReconciliation} disabled={reconciling}>
+            {reconciling ? "Running…" : "Run reconciliation now"}
+          </Button>
+        </div>
       </Empty>
     );
   }

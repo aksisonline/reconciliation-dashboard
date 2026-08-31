@@ -124,6 +124,23 @@ export function DiscrepancySheet({
                       <span className="font-medium">Recommended action: </span>
                       {explanation.recommended_action}
                     </p>
+                    {explanation.suggested_actions && explanation.suggested_actions.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">Suggested next steps</span>
+                        <div className="flex flex-col gap-1.5">
+                          {explanation.suggested_actions.map((action, i) => (
+                            <Badge
+                              key={i}
+                              variant="secondary"
+                              className="h-auto w-full min-w-0 justify-start py-1 text-left font-normal"
+                            >
+                              <Sparkles className="shrink-0 opacity-60" />
+                              <span className="min-w-0 flex-1 text-wrap">{action}</span>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <Badge variant="outline" className="w-fit capitalize">
                       Confidence: {explanation.confidence}
                     </Badge>

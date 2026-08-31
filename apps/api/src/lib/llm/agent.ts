@@ -6,7 +6,15 @@ import { buildTools } from "./tools";
 
 const explanationSchema = z.object({
   likely_cause: z.string().describe("Plain-language explanation of what probably happened"),
-  recommended_action: z.string().describe("What someone should do about it"),
+  recommended_action: z.string().describe("What someone should do about it, in a sentence or two"),
+  suggested_actions: z
+    .array(z.string())
+    .max(4)
+    .describe(
+      "2-4 short, concrete next steps a revenue owner could take (e.g. 'Refund the duplicate charge', " +
+        "'Confirm the EUR amount with the payment processor'). Each under 8 words. Purely informational — " +
+        "these are suggestions to show the user, not actions the system takes automatically.",
+    ),
   confidence: z.enum(["low", "medium", "high"]),
 });
 
@@ -65,7 +73,7 @@ export async function explain(tx: Tx, userId: string, question: string): Promise
       ...messages,
       new HumanMessage(
         "Based on everything above, respond now with ONLY a JSON object matching this shape: " +
-          '{"likely_cause": string, "recommended_action": string, "confidence": "low"|"medium"|"high"}',
+          '{"likely_cause": string, "recommended_action": string, "suggested_actions": string[] (2-4 short items), "confidence": "low"|"medium"|"high"}',
       ),
     ]);
 

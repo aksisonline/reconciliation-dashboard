@@ -16,6 +16,7 @@ import { Badge } from "#/components/ui/badge";
 import { Separator } from "#/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "#/components/ui/accordion";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
+import { CompareRowsDialog } from "#/components/compare-rows-dialog";
 import { api, ApiError } from "#/lib/api";
 import { FLAG_COPY } from "#/lib/copy";
 import type { DataStatus, IngestionFlag } from "#/lib/types";
@@ -201,20 +202,25 @@ function UploadPage() {
                             className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
                           >
                             <FlagDetail flag={flag} />
-                            {flag.resolutionStatus === "open" ? (
-                              <span className="flex shrink-0 gap-1">
-                                <Button size="sm" variant="outline" onClick={() => actOnFlag(flag.id, "acknowledge")}>
-                                  <CheckCircle2 /> Acknowledge
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => actOnFlag(flag.id, "exclude")}>
-                                  Exclude
-                                </Button>
-                              </span>
-                            ) : (
-                              <Badge variant="outline" className="shrink-0 capitalize">
-                                {flag.resolutionStatus}
-                              </Badge>
-                            )}
+                            <span className="flex shrink-0 flex-wrap items-center gap-1">
+                              {(flag.flagType === "DUPLICATE_KEY" || flag.flagType === "MULTIPLE_PAYMENTS_FOR_ORDER") && (
+                                <CompareRowsDialog flagId={flag.id} label={copy.label} />
+                              )}
+                              {flag.resolutionStatus === "open" ? (
+                                <>
+                                  <Button size="sm" variant="outline" onClick={() => actOnFlag(flag.id, "acknowledge")}>
+                                    <CheckCircle2 /> Acknowledge
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={() => actOnFlag(flag.id, "exclude")}>
+                                    Exclude
+                                  </Button>
+                                </>
+                              ) : (
+                                <Badge variant="outline" className="capitalize">
+                                  {flag.resolutionStatus}
+                                </Badge>
+                              )}
+                            </span>
                           </li>
                         ))}
                       </ul>

@@ -50,6 +50,7 @@ export type Discrepancy = {
 export type Explanation = {
   likely_cause: string;
   recommended_action: string;
+  suggested_actions?: string[];
   confidence: "low" | "medium" | "high";
 };
 

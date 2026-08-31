@@ -1,9 +1,10 @@
 import { Hono } from "hono";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import type { AppEnv } from "../types";
 import { withUserContext } from "../db/withUserContext";
 import * as schema from "../db/schema";
 import { ingestOrders, ingestPayments, runStructuralChecks } from "../lib/ingest";
+import { normalizeKey } from "../lib/csv";
 
 export const ingestRoutes = new Hono<AppEnv>();
 
@@ -41,6 +42,53 @@ ingestRoutes.get("/flags", async (c) => {
       .orderBy(desc(schema.ingestionFlags.createdAt)),
   );
   return c.json({ flags: rows });
+});
+
+/**
+ * Full rows sharing a flag's key, for side-by-side comparison in the UI —
+ * only meaningful for flags that actually represent a group of 2+ rows
+ * (DUPLICATE_KEY, MULTIPLE_PAYMENTS_FOR_ORDER). Anything else returns
+ * whatever single row (if any) matches, so the frontend can decide there's
+ * nothing to compare.
+ */
+ingestRoutes.get("/flags/:id/rows", async (c) => {
+  const userId = c.get("userId");
+  const id = c.req.param("id");
+
+  const result = await withUserContext(userId, async (tx) => {
+    const [flag] = await tx.select().from(schema.ingestionFlags).where(eq(schema.ingestionFlags.id, id));
+    if (!flag) return null;
+
+    if (flag.source === "orders") {
+      const details = flag.details as Record<string, unknown>;
+      const key = normalizeKey(flag.flagType === "DUPLICATE_KEY" ? String(details.order_id ?? "") : (flag.rowRef ?? ""));
+      const rows = await tx
+        .select()
+        .from(schema.orders)
+        .where(and(eq(schema.orders.userId, userId), eq(schema.orders.orderIdNormalized, key)));
+      return { source: "orders" as const, rows };
+    }
+
+    if (flag.flagType === "DUPLICATE_KEY") {
+      const details = flag.details as Record<string, unknown>;
+      const ref = String(details.transaction_ref ?? "").trim();
+      const rows = await tx
+        .select()
+        .from(schema.payments)
+        .where(and(eq(schema.payments.userId, userId), eq(schema.payments.transactionRef, ref)));
+      return { source: "payments" as const, rows };
+    }
+
+    const key = normalizeKey(flag.rowRef ?? "");
+    const rows = await tx
+      .select()
+      .from(schema.payments)
+      .where(and(eq(schema.payments.userId, userId), eq(schema.payments.orderReferenceNormalized, key)));
+    return { source: "payments" as const, rows };
+  });
+
+  if (result === null) return c.json({ error: "Not found" }, 404);
+  return c.json(result);
 });
 
 ingestRoutes.post("/flags/:id/acknowledge", async (c) => {

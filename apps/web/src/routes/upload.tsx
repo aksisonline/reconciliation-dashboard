@@ -237,9 +237,11 @@ function UploadPage() {
                         {group.map((flag) => (
                           <li
                             key={flag.id}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                            className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
                           >
-                            <FlagDetail flag={flag} />
+                            <div className="min-w-0 flex-1 break-words">
+                              <FlagDetail flag={flag} />
+                            </div>
                             <span className="flex shrink-0 flex-wrap items-center gap-1">
                               {isGroupFlag(flag.flagType) ? (
                                 <CompareRowsDialog

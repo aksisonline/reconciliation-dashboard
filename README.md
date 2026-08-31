@@ -4,6 +4,12 @@ An online store keeps two records of the same money: its order system (`orders.c
 
 No company name, real customer data, or real credentials appear anywhere in this repo — the sample CSVs use invented emails and order ids.
 
+## Live deployment
+
+- **App**: https://web-production-e8c73.up.railway.app
+- **API**: https://api-production-4c28.up.railway.app
+- **Test login**: `smoketest3@example.com` / `correcthorsebattery` — already has both CSVs uploaded and reconciled, so the dashboard has data immediately. Or sign up your own account.
+
 ## How it works, end to end
 
 1. Sign up / log in (real per-user email+password auth).

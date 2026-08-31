@@ -1,0 +1,10 @@
+node_modules/
+takehome-assignment-brief-jr.md
+.env
+.env.local
+*.log
+.output/
+.tanstack/
+.vscode/
+.DS_Store
+dist/

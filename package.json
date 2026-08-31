@@ -1,0 +1,14 @@
+{
+  "name": "reconciliation-dashboard",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "bun --filter ./apps/api dev",
+    "dev:web": "bun --filter ./apps/web dev",
+    "db:generate": "bun --filter ./apps/api db:generate",
+    "db:migrate": "bun --filter ./apps/api db:migrate",
+    "test": "bun --filter ./apps/api test"
+  }
+}

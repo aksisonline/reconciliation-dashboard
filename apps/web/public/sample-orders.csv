@@ -1,0 +1,4 @@
+order_id,order_date,customer_email,currency,gross_amount,discount,net_amount,status
+ORD-1001,2025-04-13 00:00:00,jane.doe@example.com,USD,210.00,0,210.00,completed
+ORD-1002,2025-04-14 09:30:00,sam.lee@example.com,USD,325.12,0.00,325.12,completed
+ORD-1003,2025-04-15 12:00:00,mo.rossi@example.com,EUR,332.00,33.20,298.80,cancelled

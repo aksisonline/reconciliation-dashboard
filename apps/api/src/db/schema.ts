@@ -43,6 +43,7 @@ export const account = pgTable("account", {
   userId: uuid("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  issuer: text("issuer").notNull(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
   password: text("password"),

@@ -26,7 +26,7 @@ Both are separate services (separate Railway deployments), talking over HTTP wit
 - **DB**: PostgreSQL. `apps/api/src/db/schema.ts` is the Drizzle schema; the actual DDL — including roles and RLS policies, which Drizzle doesn't diff — lives in `apps/api/sql/*.sql` and is applied by `bun run db:migrate`.
 - **Per-user isolation**: enforced by **Postgres Row-Level Security**, not just an app-level `WHERE user_id = ...`. The API connects as an `app_user` role that has `FORCE ROW LEVEL SECURITY` on every business table; a separate `migrator` role (table owner, bypasses RLS) is only used for migrations. Every request wraps its DB work in `withUserContext(userId, ...)` (`apps/api/src/db/withUserContext.ts`), which runs `SET LOCAL app.user_id = '<id>'` inside a transaction before any query — so even a query that forgot a `WHERE user_id` clause still can't see another user's rows, and a forgotten context (`app.user_id` unset) returns **zero rows**, not an error and not everything. This was verified directly against Postgres during development (fail-closed with no context, per-user isolation, and a blocked cross-user `INSERT` via the `WITH CHECK` clause).
 - **Auth**: [Better Auth](https://www.better-auth.com/), email + password, session cookie. Password hashing is Bun's native `Bun.password` (argon2id) wired in as Better Auth's hash/verify functions, instead of its default JS scrypt.
-- **LLM**: LangChain (JS) tool-calling agent over an OpenAI-compatible client (defaults to Groq). See [LLM approach](#llm-approach) below.
+- **LLM**: LangChain (JS) tool-calling agent over an OpenAI-compatible client (defaults to Ollama Cloud's hosted API). See [LLM approach](#llm-approach) below.
 
 ### Bun-native choices
 
@@ -118,7 +118,7 @@ The system prompt tells the model explicitly not to guess or compute numbers its
 
 **Handling bad responses**: `explainWithFallback` retries once on any failure (network, malformed structured output, tool error), then returns an explicit `explanation_unavailable` result. The API returns HTTP 502 in that case and the frontend shows an error state with a retry button — it never silently shows nothing or crashes the page. Explanations are cached (`discrepancy_explanations` table) once generated, so reopening a row doesn't re-call the LLM.
 
-**Provider**: any OpenAI-compatible endpoint via `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` env vars — defaults to Groq, but swapping to another provider (OpenRouter, etc.) is a config change, not a code change.
+**Provider**: any OpenAI-compatible endpoint via `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` env vars. The deployed instance points at [Ollama Cloud](https://ollama.com)'s hosted OpenAI-compatible API (`https://ollama.com/v1`, model `gpt-oss:20b`, available on the free tier) rather than a locally-run Ollama server, since the brief requires the LLM call to work from the live deployment, not just a developer's machine. Swapping to Groq, OpenRouter, or a self-hosted Ollama box is a config change, not a code change.
 
 ## What I'd improve with more time
 

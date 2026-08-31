@@ -27,13 +27,19 @@ export const auth = betterAuth({
   trustedOrigins: (process.env.TRUSTED_ORIGINS ?? "").split(",").filter(Boolean),
   secret: requireEnv("BETTER_AUTH_SECRET"),
   baseURL: process.env.BETTER_AUTH_URL,
-  // Frontend and API are deployed as separate Railway services (different
-  // subdomains), so the session cookie is cross-site from the browser's
-  // point of view even though both live under the same Railway project.
-  // SameSite=None+Secure is required for that. In local dev, frontend and
-  // API are both on http://localhost (different ports only), which counts
-  // as same-site, so plain Lax cookies work fine there without Secure.
   advanced: {
+    // Schema declares every id column as Postgres `uuid` with a DB-generated
+    // default. Better Auth's own id generator produces non-UUID strings,
+    // which fails the uuid column type — let Postgres generate ids instead.
+    database: {
+      generateId: false,
+    },
+    // Frontend and API are deployed as separate Railway services (different
+    // subdomains), so the session cookie is cross-site from the browser's
+    // point of view even though both live under the same Railway project.
+    // SameSite=None+Secure is required for that. In local dev, frontend and
+    // API are both on http://localhost (different ports only), which counts
+    // as same-site, so plain Lax cookies work fine there without Secure.
     defaultCookieAttributes: {
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       secure: process.env.NODE_ENV === "production",

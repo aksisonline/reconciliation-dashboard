@@ -24,6 +24,7 @@ create table if not exists "session" (
 create table if not exists "account" (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references "user"(id) on delete cascade,
+  issuer text not null,
   account_id text not null,
   provider_id text not null,
   password text,
@@ -36,6 +37,7 @@ create table if not exists "account" (
   created_at timestamp not null default now(),
   updated_at timestamp not null default now()
 );
+create unique index if not exists account_issuer_account_id_idx on "account" (issuer, account_id);
 
 create table if not exists "verification" (
   id uuid primary key default gen_random_uuid(),

@@ -20,7 +20,7 @@ Be concise and concrete. Reference actual amounts, ids, and statuses from the to
 
 function client() {
   return new ChatOpenAI({
-    model: process.env.LLM_MODEL ?? "llama-3.3-70b-versatile",
+    model: process.env.LLM_MODEL ?? "gpt-oss:20b",
     temperature: 0.2,
     apiKey: process.env.LLM_API_KEY,
     configuration: { baseURL: process.env.LLM_BASE_URL },
@@ -52,14 +52,27 @@ export async function explain(tx: Tx, userId: string, question: string): Promise
     }
   }
 
-  const structured = await client().withStructuredOutput(explanationSchema).invoke([
-    ...messages,
-    new HumanMessage(
-      "Based on everything above, give your final structured explanation now.",
-    ),
-  ]);
+  // jsonMode (plain "respond with JSON" prompting) is more reliable than the
+  // function-calling-based default across OpenAI-compatible providers that
+  // don't strictly follow OpenAI's tool-call response shape.
+  const raw = await client()
+    .withStructuredOutput(explanationSchema, { method: "jsonMode" })
+    .invoke([
+      ...messages,
+      new HumanMessage(
+        "Based on everything above, respond now with ONLY a JSON object matching this shape: " +
+          '{"likely_cause": string, "recommended_action": string, "confidence": "low"|"medium"|"high"}',
+      ),
+    ]);
 
-  return structured;
+  // Belt and suspenders: explicitly validate rather than trusting the SDK
+  // never to hand back something malformed — this is what actually lets
+  // explainWithFallback's retry/fallback path do its job.
+  const parsed = explanationSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(`Model returned malformed structured output: ${parsed.error.message}`);
+  }
+  return parsed.data;
 }
 
 export async function explainWithFallback(

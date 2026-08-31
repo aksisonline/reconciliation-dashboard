@@ -178,3 +178,18 @@ export const discrepancyExplanations = pgTable("discrepancy_explanations", {
   model: text("model").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const chatRoleEnum = pgEnum("chat_role", ["user", "assistant"]);
+
+export const discrepancyChatMessages = pgTable("discrepancy_chat_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  reconciliationId: uuid("reconciliation_id")
+    .notNull()
+    .references(() => reconciliations.id, { onDelete: "cascade" }),
+  role: chatRoleEnum("role").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

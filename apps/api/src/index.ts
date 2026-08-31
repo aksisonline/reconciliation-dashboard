@@ -10,6 +10,7 @@ import { reconcileRoutes } from "./routes/reconcile";
 import { dashboardRoutes } from "./routes/dashboard";
 import { discrepancyRoutes } from "./routes/discrepancies";
 import { explainRoutes } from "./routes/explain";
+import { chatRoutes } from "./routes/chat";
 
 const app = new Hono<AppEnv>();
 
@@ -33,6 +34,7 @@ app.route("/api/reconcile", reconcileRoutes);
 app.route("/api/dashboard", dashboardRoutes);
 app.route("/api/discrepancies", discrepancyRoutes);
 app.route("/api/discrepancies", explainRoutes);
+app.route("/api/discrepancies", chatRoutes);
 
 export default {
   port: Number(process.env.PORT ?? 3001),

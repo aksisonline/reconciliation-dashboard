@@ -52,3 +52,11 @@ export type Explanation = {
   recommended_action: string;
   confidence: "low" | "medium" | "high";
 };
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  contentHtml?: string;
+  createdAt: string;
+};

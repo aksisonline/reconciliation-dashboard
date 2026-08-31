@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { Scale } from "lucide-react";
 import { signUp } from "#/lib/auth-client";
 import { Button } from "#/components/ui/button";
-import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "#/components/ui/card";
+import { Field, FieldGroup, FieldLabel, FieldDescription, FieldError } from "#/components/ui/field";
+import { Input } from "#/components/ui/input";
 
 export const Route = createFileRoute("/signup")({ component: Signup });
 
@@ -34,46 +35,67 @@ function Signup() {
   }
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-xl text-foreground">Create an account</CardTitle>
-          <CardDescription>Each account only ever sees its own uploaded data.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="name">Name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" disabled={loading}>
-              {loading ? "Creating account…" : "Sign up"}
-            </Button>
-          </form>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link to="/login" className="text-foreground underline underline-offset-4">
-              Sign in
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
+    <div className="flex min-h-svh items-center justify-center bg-muted/40 p-6">
+      <div className="flex w-full max-w-sm flex-col gap-6">
+        <Link to="/" className="flex items-center justify-center gap-2 self-center font-medium">
+          <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Scale className="size-4" />
+          </div>
+          Reconciliation
+        </Link>
+        <Card>
+          <CardHeader>
+            <CardTitle>Create an account</CardTitle>
+            <CardDescription>Each account only ever sees its own uploaded data.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={onSubmit}>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="name">Name</FieldLabel>
+                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+                </Field>
+                <Field data-invalid={!!error}>
+                  <FieldLabel htmlFor="email">Email</FieldLabel>
+                  <Input
+                    id="email"
+                    type="email"
+                    required
+                    aria-invalid={!!error}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </Field>
+                <Field data-invalid={!!error}>
+                  <FieldLabel htmlFor="password">Password</FieldLabel>
+                  <Input
+                    id="password"
+                    type="password"
+                    required
+                    minLength={8}
+                    aria-invalid={!!error}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <FieldDescription>At least 8 characters.</FieldDescription>
+                  {error && <FieldError>{error}</FieldError>}
+                </Field>
+                <Field>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? "Creating account…" : "Sign up"}
+                  </Button>
+                </Field>
+              </FieldGroup>
+            </form>
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              Already have an account?{" "}
+              <Link to="/login" className="text-foreground underline underline-offset-4">
+                Sign in
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

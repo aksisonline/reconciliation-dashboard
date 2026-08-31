@@ -17,12 +17,12 @@ No company name, real customer data, or real credentials appear anywhere in this
 3. Immediately see a **screening report**: structural data-quality issues found while parsing (duplicate ids, orphan rows, case mismatches, malformed rows). These are informational — they never block you — but each flag can be acknowledged or excluded.
 4. Click **Run reconciliation**. The backend deterministically matches every order to its payment(s) and classifies each pair. No LLM involved in this step.
 5. Land on `/dashboard`: headline figures, a chart of discrepancies by type, and a link to the drill-down table.
-6. On `/discrepancies`, filter/search, open any row, and click **Explain** for an LLM-generated plain-language explanation and recommended action.
+6. On `/discrepancies`, filter/search, open any row to see a side-by-side comparison of the order and payment record with the mismatched fields highlighted — not a raw JSON dump. From there, click **Explain** for an LLM-generated plain-language explanation, or switch to **Discuss** for a follow-up chat about that specific discrepancy (e.g. "what should I tell the customer").
 
 ## Architecture
 
 ```
-apps/web   TanStack Start (React, SSR) + shadcn-style components + Tailwind — the frontend
+apps/web   TanStack Start (React, SSR) + real shadcn/ui components (sidebar, chart, sheet, chat) + Tailwind
 apps/api   Bun + Hono API — auth, ingestion, reconciliation, LLM explanation
 data/      the two sample CSVs used for reconciliation
 ```
@@ -39,6 +39,7 @@ Both are separate services (separate Railway deployments), talking over HTTP wit
 - `Bun.sql` (native Postgres client) as the Drizzle driver (`drizzle-orm/bun-sql`) — no `pg`/`postgres.js`.
 - `Bun.password` (argon2id) for password hashing.
 - `Bun.CryptoHasher`, `Bun.Glob`, `Bun.file` used in place of Node's `crypto`/`fs` equivalents.
+- `Bun.markdown.html()` to render chat replies server-side — no `marked`/`remark` dependency.
 - `.env` loaded natively by Bun — no `dotenv`.
 - `bun test` for the reconciliation-engine and CSV-parsing self-checks.
 
@@ -125,6 +126,8 @@ The system prompt tells the model explicitly not to guess or compute numbers its
 **Handling bad responses**: `explainWithFallback` retries once on any failure (network, malformed structured output, tool error), then returns an explicit `explanation_unavailable` result. The API returns HTTP 502 in that case and the frontend shows an error state with a retry button — it never silently shows nothing or crashes the page. Explanations are cached (`discrepancy_explanations` table) once generated, so reopening a row doesn't re-call the LLM.
 
 **Provider**: any OpenAI-compatible endpoint via `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` env vars. The deployed instance points at [Ollama Cloud](https://ollama.com)'s hosted OpenAI-compatible API (`https://ollama.com/v1`, model `gpt-oss:20b`, available on the free tier) rather than a locally-run Ollama server, since the brief requires the LLM call to work from the live deployment, not just a developer's machine. Swapping to Groq, OpenRouter, or a self-hosted Ollama box is a config change, not a code change.
+
+**Follow-up chat**: the "Discuss" tab on a discrepancy (`apps/api/src/routes/chat.ts`, `chatReply` in `agent.ts`) is a second, separate use of the same agent — same tools, same "never guess a number" system prompt, same fallback-on-failure handling — but for an open-ended conversation instead of one fixed structured shape. History is persisted per discrepancy (`discrepancy_chat_messages`, RLS-scoped like every other table) so reopening a row keeps the conversation. Replies are plain markdown, rendered server-side to HTML with Bun's native `Bun.markdown.html()` (no extra markdown dependency) before being sent to the frontend.
 
 ## What I'd improve with more time
 

@@ -115,7 +115,10 @@ export const ChatPanel = forwardRef<
         <MessageScrollerProvider>
           <MessageScroller className="min-h-0 flex-1">
             <MessageScrollerViewport>
-              <MessageScrollerContent>
+              {/* A fixed reading-width column, centered — Bubble caps at 80% of its parent, so on a
+                  very wide parent (the panel expanded to near-fullscreen) an unconstrained parent
+                  left bubbles pinned to the left edge with a large empty gap on the right. */}
+              <MessageScrollerContent className="mx-auto w-full max-w-3xl">
                 {leading && (
                   <MessageScrollerItem>
                     <Message align="start">
@@ -173,7 +176,7 @@ export const ChatPanel = forwardRef<
       )}
 
       {error && (
-        <div className="flex items-center justify-between gap-2">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2">
           <p className="text-xs text-destructive">{error}</p>
           {failedContent && (
             <Button size="sm" variant="outline" onClick={() => send(failedContent)}>
@@ -184,7 +187,7 @@ export const ChatPanel = forwardRef<
       )}
 
       <form
-        className="flex gap-2"
+        className="mx-auto flex w-full max-w-3xl gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           send();

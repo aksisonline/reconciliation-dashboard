@@ -61,7 +61,9 @@ export function DashboardAiPanel() {
         )}
       </div>
 
-      <div className="shrink-0 border-b px-4 py-3">
+      {/* Capped + independently scrollable — a long insight (several suggested-action
+          chips) must never eat into the chat's space below it. */}
+      <div className="max-h-[45%] shrink-0 overflow-y-auto border-b px-4 py-3">
         {!loaded ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : state === "loading" ? (

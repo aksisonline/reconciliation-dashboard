@@ -100,7 +100,7 @@ export function DashboardAiPanel() {
         )}
       </div>
 
-      <div className="min-h-0 flex-1 p-3">
+      <div className="min-h-0 flex-1 overflow-hidden p-3">
         <ChatPanel endpoint="/api/dashboard/chat" placeholder='Ask about your data — e.g. "which discrepancy has the biggest dollar impact?"' />
       </div>
     </Card>

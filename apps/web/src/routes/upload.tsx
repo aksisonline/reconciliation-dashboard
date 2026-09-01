@@ -24,6 +24,7 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { CompareRowsDialog } from "#/components/compare-rows-dialog";
+import { ReviewGroupsCarousel } from "#/components/review-groups-carousel";
 import { FlowProgress } from "#/components/flow-progress";
 import { api, ApiError } from "#/lib/api";
 import { FLAG_COPY } from "#/lib/copy";
@@ -131,6 +132,9 @@ function UploadPage() {
   const grouped = groupByType(flags);
   const openCount = flags.filter((f) => f.resolutionStatus === "open").length;
   const hasData = (status?.orders.count ?? 0) > 0 || (status?.payments.count ?? 0) > 0;
+  const openGroupItems = flags
+    .filter((f) => isGroupFlag(f.flagType) && f.resolutionStatus === "open")
+    .map((f) => ({ flagId: f.id, label: FLAG_COPY[f.flagType]?.label ?? f.flagType }));
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -198,7 +202,16 @@ function UploadPage() {
                 : "All flags reviewed."}
             </CardDescription>
             {openCount > 0 && (
-              <CardAction>
+              <CardAction className="flex gap-2">
+                {openGroupItems.length > 0 && (
+                  <ReviewGroupsCarousel
+                    items={openGroupItems}
+                    onDone={() => {
+                      refreshFlags();
+                      refreshStatus();
+                    }}
+                  />
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -247,14 +260,21 @@ function UploadPage() {
                             </div>
                             <span className="flex shrink-0 flex-wrap items-center gap-1">
                               {isGroupFlag(flag.flagType) ? (
-                                <CompareRowsDialog
-                                  flagId={flag.id}
-                                  label={copy.label}
-                                  onApplied={() => {
-                                    refreshFlags();
-                                    refreshStatus();
-                                  }}
-                                />
+                                <>
+                                  {flag.resolutionStatus !== "open" && (
+                                    <Badge variant="outline" className="gap-1">
+                                      <CheckCheck className="size-3" /> Reviewed
+                                    </Badge>
+                                  )}
+                                  <CompareRowsDialog
+                                    flagId={flag.id}
+                                    label={copy.label}
+                                    onApplied={() => {
+                                      refreshFlags();
+                                      refreshStatus();
+                                    }}
+                                  />
+                                </>
                               ) : flag.resolutionStatus === "open" ? (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>

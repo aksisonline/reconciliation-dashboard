@@ -158,7 +158,7 @@ export function DiscrepancySheet({
                 )}
               </TabsContent>
 
-              <TabsContent value="discuss" className="min-h-0 flex-1 pb-4">
+              <TabsContent value="discuss" className="min-h-0 flex-1 overflow-hidden pb-4">
                 <ChatPanel
                   endpoint={`/api/discrepancies/${discrepancy.id}`}
                   placeholder='Ask a follow-up — e.g. "what should I tell the customer" or "how does this compare to similar cases".'

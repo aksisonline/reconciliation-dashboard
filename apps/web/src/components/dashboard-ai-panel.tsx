@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RefreshCcw, Sparkles } from "lucide-react";
+import { Maximize2, Minimize2, RefreshCcw, Sparkles } from "lucide-react";
 import { Card } from "#/components/ui/card";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -7,6 +7,7 @@ import { AgentProgress } from "#/components/agent-progress";
 import { ChatPanel, type ChatPanelHandle } from "#/components/chat-panel";
 import { useAgentSteps, type StepEvent } from "#/lib/agent-steps";
 import { api, ApiError, postSSE } from "#/lib/api";
+import { cn } from "#/lib/utils";
 import type { Explanation } from "#/lib/types";
 
 export function DashboardAiPanel() {
@@ -14,8 +15,18 @@ export function DashboardAiPanel() {
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const chatRef = useRef<ChatPanelHandle>(null);
   const { calls, compiling, handle: handleStep, reset: resetSteps } = useAgentSteps();
+
+  useEffect(() => {
+    if (!expanded) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setExpanded(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
 
   useEffect(() => {
     api
@@ -121,28 +132,52 @@ export function DashboardAiPanel() {
   );
 
   return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden py-0">
-      <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Sparkles className="size-4 text-chart-1" />
-          AI insight
-        </div>
-        {insight && (
-          <Button size="icon-sm" variant="ghost" onClick={generate} disabled={state === "loading"} title="Regenerate">
-            <RefreshCcw className={state === "loading" ? "animate-spin" : undefined} />
-          </Button>
-        )}
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden p-3">
-        <ChatPanel
-          ref={chatRef}
-          endpoint="/api/dashboard/chat"
-          placeholder='Ask about your data — e.g. "which discrepancy has the biggest dollar impact?"'
-          leading={insightBubble}
-          emptyAction={noInsightYet ? generateButton : undefined}
+    <>
+      {expanded && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50"
+          onClick={() => setExpanded(false)}
+          aria-hidden="true"
         />
-      </div>
-    </Card>
+      )}
+      <Card
+        className={cn(
+          "flex h-full min-h-0 flex-col overflow-hidden py-0",
+          expanded && "fixed inset-4 z-50 shadow-2xl md:inset-10",
+        )}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Sparkles className="size-4 text-chart-1" />
+            AI insight
+          </div>
+          <div className="flex items-center gap-1">
+            {insight && (
+              <Button size="icon-sm" variant="ghost" onClick={generate} disabled={state === "loading"} title="Regenerate">
+                <RefreshCcw className={state === "loading" ? "animate-spin" : undefined} />
+              </Button>
+            )}
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              onClick={() => setExpanded((e) => !e)}
+              title={expanded ? "Minimize" : "Expand"}
+            >
+              {expanded ? <Minimize2 /> : <Maximize2 />}
+            </Button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden p-3">
+          <ChatPanel
+            ref={chatRef}
+            endpoint="/api/dashboard/chat"
+            placeholder='Ask about your data — e.g. "which discrepancy has the biggest dollar impact?"'
+            leading={insightBubble}
+            emptyAction={noInsightYet ? generateButton : undefined}
+          />
+        </div>
+      </Card>
+    </>
   );
 }

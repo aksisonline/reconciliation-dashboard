@@ -47,6 +47,45 @@ export function DashboardAiPanel() {
     }
   }
 
+  // Rendered as the first bubble in the chat feed itself (see ChatPanel's `leading` prop) —
+  // one continuous conversation instead of a boxed-off "insight" section above a divider.
+  const insightBubble = !loaded ? (
+    <span className="text-sm text-muted-foreground">Loading…</span>
+  ) : state === "loading" ? (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Spinner /> Asking the LLM…
+    </div>
+  ) : state === "error" ? (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm text-destructive">{error}</p>
+      <Button size="sm" variant="outline" className="w-fit" onClick={generate}>
+        Retry
+      </Button>
+    </div>
+  ) : insight ? (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-sm leading-relaxed">{insight.likely_cause}</p>
+      <p className="text-sm leading-relaxed text-muted-foreground">{insight.recommended_action}</p>
+      {insight.suggested_actions && insight.suggested_actions.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {insight.suggested_actions.map((action, i) => (
+            <Badge key={i} variant="secondary" className="h-auto w-full min-w-0 justify-start py-1 text-left font-normal">
+              <Sparkles className="shrink-0 opacity-60" />
+              <span className="min-w-0 flex-1 text-wrap">{action}</span>
+            </Badge>
+          ))}
+        </div>
+      )}
+      <Badge variant="outline" className="w-fit capitalize">
+        Confidence: {insight.confidence}
+      </Badge>
+    </div>
+  ) : (
+    <Button size="sm" onClick={generate}>
+      <Sparkles /> Generate insight
+    </Button>
+  );
+
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden py-0">
       <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
@@ -61,49 +100,12 @@ export function DashboardAiPanel() {
         )}
       </div>
 
-      {/* Capped + independently scrollable — a long insight (several suggested-action
-          chips) must never eat into the chat's space below it. */}
-      <div className="max-h-[45%] shrink-0 overflow-y-auto border-b px-4 py-3">
-        {!loaded ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : state === "loading" ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner /> Asking the LLM…
-          </div>
-        ) : state === "error" ? (
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button size="sm" variant="outline" onClick={generate}>
-              Retry
-            </Button>
-          </div>
-        ) : insight ? (
-          <div className="flex flex-col gap-2.5">
-            <p className="text-sm leading-relaxed">{insight.likely_cause}</p>
-            <p className="text-sm leading-relaxed text-muted-foreground">{insight.recommended_action}</p>
-            {insight.suggested_actions && insight.suggested_actions.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                {insight.suggested_actions.map((action, i) => (
-                  <Badge key={i} variant="secondary" className="h-auto w-full min-w-0 justify-start py-1 text-left font-normal">
-                    <Sparkles className="shrink-0 opacity-60" />
-                    <span className="min-w-0 flex-1 text-wrap">{action}</span>
-                  </Badge>
-                ))}
-              </div>
-            )}
-            <Badge variant="outline" className="w-fit capitalize">
-              Confidence: {insight.confidence}
-            </Badge>
-          </div>
-        ) : (
-          <Button size="sm" onClick={generate}>
-            <Sparkles /> Generate insight
-          </Button>
-        )}
-      </div>
-
       <div className="min-h-0 flex-1 overflow-hidden p-3">
-        <ChatPanel endpoint="/api/dashboard/chat" placeholder='Ask about your data — e.g. "which discrepancy has the biggest dollar impact?"' />
+        <ChatPanel
+          endpoint="/api/dashboard/chat"
+          placeholder='Ask about your data — e.g. "which discrepancy has the biggest dollar impact?"'
+          leading={insightBubble}
+        />
       </div>
     </Card>
   );

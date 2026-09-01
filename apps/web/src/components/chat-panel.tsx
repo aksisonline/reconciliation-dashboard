@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, Send } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Check, MessageCircleDashedIcon, Send } from "lucide-react";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -13,6 +13,7 @@ import { Bubble, BubbleContent } from "#/components/ui/bubble";
 import { Input } from "#/components/ui/input";
 import { Button } from "#/components/ui/button";
 import { Spinner } from "#/components/ui/spinner";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "#/components/ui/empty";
 import { api, ApiError, postSSE } from "#/lib/api";
 import type { ChatMessage } from "#/lib/types";
 
@@ -27,8 +28,18 @@ type ToolCall = { name: string; done: boolean };
 
 /** Generic "ask a question, get a reply" chat panel — used for both the per-discrepancy
  * Discuss tab and the dashboard-level "ask about your data" chat. `endpoint` is the base
- * path; `${endpoint}/messages` is fetched/posted to. */
-export function ChatPanel({ endpoint, placeholder }: { endpoint: string; placeholder: string }) {
+ * path; `${endpoint}/messages` is fetched/posted to. `leading`, when given, renders as the
+ * first bubble in the same scrolling feed (used to fold the dashboard's AI insight into the
+ * chat itself instead of showing it in a separate boxed-off section). */
+export function ChatPanel({
+  endpoint,
+  placeholder,
+  leading,
+}: {
+  endpoint: string;
+  placeholder: string;
+  leading?: ReactNode;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -98,75 +109,99 @@ export function ChatPanel({ endpoint, placeholder }: { endpoint: string; placeho
     }
   }
 
+  // A `leading` bubble (the dashboard's AI insight) counts as content on its own, so the
+  // generic empty state only shows when there's truly nothing — no insight, no messages yet.
+  const showEmptyState = loaded && messages.length === 0 && !sending && !leading;
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <MessageScrollerProvider>
-        <MessageScroller className="min-h-0 flex-1">
-          <MessageScrollerViewport>
-            <MessageScrollerContent>
-              {!loaded ? (
-                <p className="p-4 text-sm text-muted-foreground">Loading conversation…</p>
-              ) : messages.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">{placeholder}</p>
-              ) : (
-                messages.map((m) => (
-                  <MessageScrollerItem key={m.id}>
-                    <Message align={m.role === "user" ? "end" : "start"}>
+      {showEmptyState ? (
+        <Empty className="min-h-0 flex-1 border-none p-4">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MessageCircleDashedIcon />
+            </EmptyMedia>
+            <EmptyDescription>{placeholder}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <MessageScrollerProvider>
+          <MessageScroller className="min-h-0 flex-1">
+            <MessageScrollerViewport>
+              <MessageScrollerContent>
+                {leading && (
+                  <MessageScrollerItem>
+                    <Message align="start">
                       <MessageContent>
-                        <Bubble
-                          align={m.role === "user" ? "end" : "start"}
-                          variant={m.role === "user" ? "default" : "muted"}
-                        >
-                          {m.contentHtml ? (
-                            <BubbleContent
-                              className="chat-markdown"
-                              dangerouslySetInnerHTML={{ __html: m.contentHtml }}
-                            />
-                          ) : (
-                            <BubbleContent className="whitespace-pre-wrap">{m.content}</BubbleContent>
-                          )}
+                        <Bubble align="start" variant="muted">
+                          <BubbleContent>{leading}</BubbleContent>
                         </Bubble>
                       </MessageContent>
                     </Message>
                   </MessageScrollerItem>
-                ))
-              )}
-              {sending && (
-                <MessageScrollerItem>
-                  <Message align="start">
-                    <MessageContent>
-                      <Bubble align="start" variant="muted">
-                        <BubbleContent className="flex flex-col gap-1.5">
-                          {calls.length === 0 ? (
-                            <span className="shimmer text-sm">Thinking…</span>
-                          ) : (
-                            <>
-                              {calls.map((c, i) => (
-                                <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  {c.done ? (
-                                    <Check className="size-3 shrink-0 text-chart-2" />
-                                  ) : (
-                                    <Spinner className="size-3 shrink-0" />
-                                  )}
-                                  <span>{TOOL_LABELS[c.name] ?? `Calling ${c.name}`}</span>
-                                </div>
-                              ))}
-                              {calls.every((c) => c.done) && (
-                                <span className="shimmer text-sm">Writing reply…</span>
-                              )}
-                            </>
-                          )}
-                        </BubbleContent>
-                      </Bubble>
-                    </MessageContent>
-                  </Message>
-                </MessageScrollerItem>
-              )}
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-          <MessageScrollerButton />
-        </MessageScroller>
-      </MessageScrollerProvider>
+                )}
+                {!loaded ? (
+                  <p className="p-4 text-sm text-muted-foreground">Loading conversation…</p>
+                ) : (
+                  messages.map((m) => (
+                    <MessageScrollerItem key={m.id}>
+                      <Message align={m.role === "user" ? "end" : "start"}>
+                        <MessageContent>
+                          <Bubble
+                            align={m.role === "user" ? "end" : "start"}
+                            variant={m.role === "user" ? "default" : "muted"}
+                          >
+                            {m.contentHtml ? (
+                              <BubbleContent
+                                className="chat-markdown"
+                                dangerouslySetInnerHTML={{ __html: m.contentHtml }}
+                              />
+                            ) : (
+                              <BubbleContent className="whitespace-pre-wrap">{m.content}</BubbleContent>
+                            )}
+                          </Bubble>
+                        </MessageContent>
+                      </Message>
+                    </MessageScrollerItem>
+                  ))
+                )}
+                {sending && (
+                  <MessageScrollerItem>
+                    <Message align="start">
+                      <MessageContent>
+                        <Bubble align="start" variant="muted">
+                          <BubbleContent className="flex flex-col gap-1.5">
+                            {calls.length === 0 ? (
+                              <span className="shimmer text-sm">Thinking…</span>
+                            ) : (
+                              <>
+                                {calls.map((c, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    {c.done ? (
+                                      <Check className="size-3 shrink-0 text-chart-2" />
+                                    ) : (
+                                      <Spinner className="size-3 shrink-0" />
+                                    )}
+                                    <span>{TOOL_LABELS[c.name] ?? `Calling ${c.name}`}</span>
+                                  </div>
+                                ))}
+                                {calls.every((c) => c.done) && (
+                                  <span className="shimmer text-sm">Writing reply…</span>
+                                )}
+                              </>
+                            )}
+                          </BubbleContent>
+                        </Bubble>
+                      </MessageContent>
+                    </Message>
+                  </MessageScrollerItem>
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton />
+          </MessageScroller>
+        </MessageScrollerProvider>
+      )}
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 

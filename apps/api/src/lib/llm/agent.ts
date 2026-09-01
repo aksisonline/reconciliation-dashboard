@@ -48,7 +48,8 @@ type ChatMessage = SystemMessage | HumanMessage | AIMessage | ToolMessage;
  * instead of a plain "thinking" spinner. */
 export type AgentStep =
   | { type: "tool_call"; name: string; args: unknown }
-  | { type: "tool_result"; name: string; result: string };
+  | { type: "tool_result"; name: string; result: string }
+  | { type: "compiling" };
 
 /** Runs the bind-tools / call-tools loop until the model stops calling tools. */
 async function runToolLoop(
@@ -79,8 +80,19 @@ async function runToolLoop(
   return messages;
 }
 
-export async function explain(tx: Tx, userId: string, question: string): Promise<Explanation> {
-  const messages = await runToolLoop(tx, userId, [new SystemMessage(SYSTEM_PROMPT), new HumanMessage(question)]);
+export async function explain(
+  tx: Tx,
+  userId: string,
+  question: string,
+  onStep?: (step: AgentStep) => void,
+): Promise<Explanation> {
+  const messages = await runToolLoop(
+    tx,
+    userId,
+    [new SystemMessage(SYSTEM_PROMPT), new HumanMessage(question)],
+    onStep,
+  );
+  onStep?.({ type: "compiling" });
 
   // jsonMode (plain "respond with JSON" prompting) is more reliable than the
   // function-calling-based default across OpenAI-compatible providers that
@@ -109,10 +121,11 @@ export async function explainWithFallback(
   tx: Tx,
   userId: string,
   question: string,
+  onStep?: (step: AgentStep) => void,
 ): Promise<{ ok: true; explanation: Explanation } | { ok: false; error: string }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const explanation = await explain(tx, userId, question);
+      const explanation = await explain(tx, userId, question, onStep);
       return { ok: true, explanation };
     } catch (err) {
       if (attempt === 1) {

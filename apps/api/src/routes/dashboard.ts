@@ -93,21 +93,32 @@ dashboardRoutes.get("/insight", async (c) => {
 dashboardRoutes.post("/insight", async (c) => {
   const userId = c.get("userId");
 
-  const result = await withUserContext(userId, (tx) => explainWithFallback(tx, userId, INSIGHT_QUESTION));
-  if (!result.ok) {
-    return c.json({ error: "insight_unavailable", detail: result.error }, 502);
-  }
+  return streamSSE(c, async (stream) => {
+    const result = await withUserContext(userId, (tx) =>
+      explainWithFallback(tx, userId, INSIGHT_QUESTION, (step) =>
+        stream.writeSSE({ event: "step", data: JSON.stringify(step) }),
+      ),
+    );
 
-  await withUserContext(userId, async (tx) => {
-    await tx.delete(schema.dashboardInsights).where(eq(schema.dashboardInsights.userId, userId));
-    await tx.insert(schema.dashboardInsights).values({
-      userId,
-      structured: result.explanation,
-      model: process.env.LLM_MODEL ?? "unknown",
+    if (!result.ok) {
+      await stream.writeSSE({ event: "error", data: JSON.stringify({ error: result.error }) });
+      return;
+    }
+
+    await withUserContext(userId, async (tx) => {
+      await tx.delete(schema.dashboardInsights).where(eq(schema.dashboardInsights.userId, userId));
+      await tx.insert(schema.dashboardInsights).values({
+        userId,
+        structured: result.explanation,
+        model: process.env.LLM_MODEL ?? "unknown",
+      });
+    });
+
+    await stream.writeSSE({
+      event: "final",
+      data: JSON.stringify({ insight: result.explanation, createdAt: new Date().toISOString() }),
     });
   });
-
-  return c.json({ insight: result.explanation, createdAt: new Date().toISOString() });
 });
 
 dashboardRoutes.get("/chat/messages", async (c) => {

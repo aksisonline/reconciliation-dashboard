@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, MessageCircleDashedIcon, Send } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { MessageCircleDashedIcon, RotateCcw, Send } from "lucide-react";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -12,19 +12,13 @@ import { Message, MessageContent } from "#/components/ui/message";
 import { Bubble, BubbleContent } from "#/components/ui/bubble";
 import { Input } from "#/components/ui/input";
 import { Button } from "#/components/ui/button";
-import { Spinner } from "#/components/ui/spinner";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia } from "#/components/ui/empty";
+import { AgentProgress } from "#/components/agent-progress";
+import { useAgentSteps, type StepEvent } from "#/lib/agent-steps";
 import { api, ApiError, postSSE } from "#/lib/api";
 import type { ChatMessage } from "#/lib/types";
 
-const TOOL_LABELS: Record<string, string> = {
-  getDiscrepancy: "Looking up the discrepancy",
-  getDiscrepanciesByType: "Pulling discrepancies by type",
-  getSummaryTotals: "Calculating summary totals",
-  compareAmounts: "Comparing amounts",
-};
-
-type ToolCall = { name: string; done: boolean };
+export type ChatPanelHandle = { sendMessage: (content: string) => void };
 
 /** Generic "ask a question, get a reply" chat panel — used for both the per-discrepancy
  * Discuss tab and the dashboard-level "ask about your data" chat. `endpoint` is the base
@@ -32,25 +26,20 @@ type ToolCall = { name: string; done: boolean };
  * first bubble in the same scrolling feed (used to fold the dashboard's AI insight into the
  * chat itself instead of showing it in a separate boxed-off section). `emptyAction`, when
  * given, renders as a centered call-to-action in the empty state (before there's anything to
- * scroll) instead of `leading` sitting awkwardly at the top of an otherwise blank feed. */
-export function ChatPanel({
-  endpoint,
-  placeholder,
-  leading,
-  emptyAction,
-}: {
-  endpoint: string;
-  placeholder: string;
-  leading?: ReactNode;
-  emptyAction?: ReactNode;
-}) {
+ * scroll) instead of `leading` sitting awkwardly at the top of an otherwise blank feed. A ref
+ * exposes `sendMessage` so a parent (e.g. a clickable suggested-action chip) can drive it. */
+export const ChatPanel = forwardRef<
+  ChatPanelHandle,
+  { endpoint: string; placeholder: string; leading?: ReactNode; emptyAction?: ReactNode }
+>(function ChatPanel({ endpoint, placeholder, leading, emptyAction }, ref) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const [calls, setCalls] = useState<ToolCall[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [failedContent, setFailedContent] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { calls, compiling, handle: handleStep, reset: resetSteps } = useAgentSteps();
 
   useEffect(() => {
     let cancelled = false;
@@ -63,55 +52,46 @@ export function ChatPanel({
     };
   }, [endpoint]);
 
-  async function send() {
-    const content = draft.trim();
+  async function send(overrideContent?: string) {
+    const content = (overrideContent ?? draft).trim();
     if (!content || sending) return;
-    setDraft("");
+    if (!overrideContent) setDraft("");
     setError(null);
+    setFailedContent(null);
     setSending(true);
-    setCalls([]);
-    setMessages((prev) => [
-      ...prev,
-      { id: `pending-${Date.now()}`, role: "user", content, createdAt: new Date().toISOString() },
-    ]);
+    resetSteps();
+    // A retry reuses the same pending user bubble that's already on screen rather than
+    // adding a second copy of it.
+    setMessages((prev) =>
+      overrideContent && prev.at(-1)?.id.startsWith("pending-")
+        ? prev
+        : [...prev, { id: `pending-${Date.now()}`, role: "user", content, createdAt: new Date().toISOString() }],
+    );
 
     try {
       for await (const evt of postSSE(`${endpoint}/messages`, { content })) {
         if (evt.event === "step") {
-          const step = JSON.parse(evt.data) as { type: "tool_call" | "tool_result"; name: string };
-          if (step.type === "tool_call") {
-            setCalls((prev) => [...prev, { name: step.name, done: false }]);
-          } else {
-            setCalls((prev) => {
-              let idx = -1;
-              for (let i = prev.length - 1; i >= 0; i--) {
-                if (prev[i].name === step.name && !prev[i].done) {
-                  idx = i;
-                  break;
-                }
-              }
-              if (idx === -1) return prev;
-              const next = [...prev];
-              next[idx] = { ...next[idx], done: true };
-              return next;
-            });
-          }
+          handleStep(JSON.parse(evt.data) as StepEvent);
         } else if (evt.event === "final") {
           const { message } = JSON.parse(evt.data) as { message: ChatMessage };
           setMessages((prev) => [...prev, message]);
         } else if (evt.event === "error") {
           const { error: msg } = JSON.parse(evt.data) as { error: string };
-          setError(msg || "Couldn't get a reply. Try again.");
+          setError(msg || "Couldn't get a reply.");
+          setFailedContent(content);
         }
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't get a reply. Try again.");
+      setError(err instanceof ApiError ? err.message : "Couldn't get a reply.");
+      setFailedContent(content);
     } finally {
       setSending(false);
-      setCalls([]);
+      resetSteps();
       inputRef.current?.focus();
     }
   }
+
+  useImperativeHandle(ref, () => ({ sendMessage: (content: string) => send(content) }));
 
   // A `leading` bubble (the dashboard's AI insight) counts as content on its own, so the
   // empty state only shows when there's truly nothing yet — no messages, and either no
@@ -177,26 +157,8 @@ export function ChatPanel({
                     <Message align="start">
                       <MessageContent>
                         <Bubble align="start" variant="muted">
-                          <BubbleContent className="flex flex-col gap-1.5">
-                            {calls.length === 0 ? (
-                              <span className="shimmer text-sm">Thinking…</span>
-                            ) : (
-                              <>
-                                {calls.map((c, i) => (
-                                  <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    {c.done ? (
-                                      <Check className="size-3 shrink-0 text-chart-2" />
-                                    ) : (
-                                      <Spinner className="size-3 shrink-0" />
-                                    )}
-                                    <span>{TOOL_LABELS[c.name] ?? `Calling ${c.name}`}</span>
-                                  </div>
-                                ))}
-                                {calls.every((c) => c.done) && (
-                                  <span className="shimmer text-sm">Writing reply…</span>
-                                )}
-                              </>
-                            )}
+                          <BubbleContent>
+                            <AgentProgress calls={calls} compiling={compiling} />
                           </BubbleContent>
                         </Bubble>
                       </MessageContent>
@@ -210,7 +172,16 @@ export function ChatPanel({
         </MessageScrollerProvider>
       )}
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-destructive">{error}</p>
+          {failedContent && (
+            <Button size="sm" variant="outline" onClick={() => send(failedContent)}>
+              <RotateCcw /> Try again
+            </Button>
+          )}
+        </div>
+      )}
 
       <form
         className="flex gap-2"
@@ -232,4 +203,4 @@ export function ChatPanel({
       </form>
     </div>
   );
-}
+});

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { and, eq } from "drizzle-orm";
 import type { AppEnv } from "../types";
 import { withUserContext } from "../db/withUserContext";
@@ -24,25 +25,36 @@ explainRoutes.post("/:id/explain", async (c) => {
   );
   if (cached.length > 0) return c.json({ explanation: cached[0].structured, cached: true });
 
-  const result = await withUserContext(userId, (tx) =>
-    explainWithFallback(tx, userId, `Explain reconciliation discrepancy with id ${id}. Call getDiscrepancy first.`),
-  );
+  return streamSSE(c, async (stream) => {
+    const result = await withUserContext(userId, (tx) =>
+      explainWithFallback(
+        tx,
+        userId,
+        `Explain reconciliation discrepancy with id ${id}. Call getDiscrepancy first.`,
+        (step) => stream.writeSSE({ event: "step", data: JSON.stringify(step) }),
+      ),
+    );
 
-  if (!result.ok) {
-    return c.json({ error: "explanation_unavailable", detail: result.error }, 502);
-  }
+    if (!result.ok) {
+      await stream.writeSSE({ event: "error", data: JSON.stringify({ error: result.error }) });
+      return;
+    }
 
-  await withUserContext(userId, (tx) =>
-    tx.insert(schema.discrepancyExplanations).values({
-      userId,
-      reconciliationId: id,
-      explanationText: `${result.explanation.likely_cause} ${result.explanation.recommended_action}`,
-      structured: result.explanation,
-      model: process.env.LLM_MODEL ?? "unknown",
-    }),
-  );
+    await withUserContext(userId, (tx) =>
+      tx.insert(schema.discrepancyExplanations).values({
+        userId,
+        reconciliationId: id,
+        explanationText: `${result.explanation.likely_cause} ${result.explanation.recommended_action}`,
+        structured: result.explanation,
+        model: process.env.LLM_MODEL ?? "unknown",
+      }),
+    );
 
-  return c.json({ explanation: result.explanation, cached: false });
+    await stream.writeSSE({
+      event: "final",
+      data: JSON.stringify({ explanation: result.explanation, cached: false }),
+    });
+  });
 });
 
 explainRoutes.post("/explain-batch", async (c) => {

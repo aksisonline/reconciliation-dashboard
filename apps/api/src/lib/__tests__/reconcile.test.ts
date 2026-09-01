@@ -22,6 +22,10 @@ function order(overrides: Partial<OrderRow>): OrderRow {
     rawRow: {},
     rawRowHash: "x",
     createdAt: new Date(),
+    resolutionStatus: "open",
+    resolutionType: null,
+    resolutionNote: null,
+    resolvedAt: null,
     ...overrides,
   };
 }
@@ -44,6 +48,10 @@ function payment(overrides: Partial<PaymentRow>): PaymentRow {
     rawRow: {},
     rawRowHash: "x",
     createdAt: new Date(),
+    resolutionStatus: "open",
+    resolutionType: null,
+    resolutionNote: null,
+    resolvedAt: null,
     ...overrides,
   };
 }

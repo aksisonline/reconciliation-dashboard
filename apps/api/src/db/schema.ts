@@ -107,6 +107,12 @@ export const orders = pgTable("orders", {
   rawRow: jsonb("raw_row").notNull(),
   rawRowHash: text("raw_row_hash").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Resolution workflow — layered on top of the deterministic reconciliation result, not a
+  // claim that the underlying disagreement stopped existing. See resolution_status below.
+  resolutionStatus: text("resolution_status").notNull().default("open"),
+  resolutionType: text("resolution_type"),
+  resolutionNote: text("resolution_note"),
+  resolvedAt: timestamp("resolved_at"),
 });
 
 export const payments = pgTable("payments", {
@@ -128,6 +134,10 @@ export const payments = pgTable("payments", {
   rawRow: jsonb("raw_row").notNull(),
   rawRowHash: text("raw_row_hash").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolutionStatus: text("resolution_status").notNull().default("open"),
+  resolutionType: text("resolution_type"),
+  resolutionNote: text("resolution_note"),
+  resolvedAt: timestamp("resolved_at"),
 });
 
 export const ingestionFlags = pgTable("ingestion_flags", {

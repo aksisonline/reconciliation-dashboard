@@ -34,8 +34,24 @@ export type DashboardSummary = {
   byType: Record<string, { count: number; amountAtRisk: number }>;
 };
 
-export type OrderRecord = Record<string, unknown> & { id: string; orderId: string; isExcluded: boolean };
-export type PaymentRecord = Record<string, unknown> & { id: string; transactionRef: string; isExcluded: boolean };
+export type ResolutionType = "EDIT" | "EXCLUDE" | "NOTE";
+
+type ResolutionFields = {
+  resolutionStatus: "open" | "resolved";
+  resolutionType: ResolutionType | null;
+  resolutionNote: string | null;
+  resolvedAt: string | null;
+};
+
+export type OrderRecord = Record<string, unknown> &
+  ResolutionFields & { id: string; orderId: string; isExcluded: boolean };
+export type PaymentRecord = Record<string, unknown> &
+  ResolutionFields & { id: string; transactionRef: string; isExcluded: boolean };
+
+export type ResolveAction =
+  | { kind: "edit"; target: "order" | "payment"; field: string; value: string }
+  | { kind: "exclude"; target: "order" | "payment" }
+  | { kind: "note"; target: "order" | "payment" | "both"; note: string };
 
 export type Discrepancy = {
   id: string;

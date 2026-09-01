@@ -1,4 +1,4 @@
-import type { DiscrepancyType } from "./types";
+import type { Discrepancy, DiscrepancyType, ResolveAction } from "./types";
 
 export const FLAG_COPY: Record<string, { label: string; description: string; tone: "info" | "warning" }> = {
   MALFORMED_ROW: {
@@ -67,4 +67,109 @@ export const DISCREPANCY_COPY: Record<DiscrepancyType, { label: string; descript
     label: "Unresolved refund",
     description: "The order is marked refunded, but no refund payment was found.",
   },
+};
+
+/** A resolution preset is either applied immediately (edit/exclude — the value is deterministic
+ * from the discrepancy's own data) or opens a note prompt first (note — needs user text). Curated
+ * per discrepancy type instead of one bespoke action type per case; see resolve-discrepancy.tsx. */
+export type ResolutionPreset = { id: string; label: string } & (
+  | { primitive: "edit"; target: "order" | "payment"; field: string; getValue: (d: Discrepancy) => string | null }
+  | { primitive: "exclude"; target: "order" | "payment" }
+  | { primitive: "note"; target: "order" | "payment" | "both"; defaultNote: string }
+);
+
+export function presetAction(preset: ResolutionPreset, d: Discrepancy, note?: string): ResolveAction | null {
+  if (preset.primitive === "edit") {
+    const value = preset.getValue(d);
+    return value === null ? null : { kind: "edit", target: preset.target, field: preset.field, value };
+  }
+  if (preset.primitive === "exclude") {
+    return { kind: "exclude", target: preset.target };
+  }
+  return { kind: "note", target: preset.target, note: note ?? preset.defaultNote };
+}
+
+export const RESOLUTION_PRESETS: Record<DiscrepancyType, ResolutionPreset[]> = {
+  MISSING_PAYMENT: [
+    { id: "write-off", label: "Write off", primitive: "note", target: "order", defaultNote: "Written off — payment not recoverable." },
+    {
+      id: "paid-externally",
+      label: "Mark paid outside the system",
+      primitive: "note",
+      target: "order",
+      defaultNote: "Payment received through another channel; reconciled manually.",
+    },
+  ],
+  MISSING_ORDER: [
+    { id: "exclude-payment", label: "Exclude this payment", primitive: "exclude", target: "payment" },
+    {
+      id: "reviewed",
+      label: "Mark reviewed",
+      primitive: "note",
+      target: "payment",
+      defaultNote: "Reviewed — no matching order, accepted as-is.",
+    },
+  ],
+  AMOUNT_MISMATCH: [
+    {
+      id: "match-order-to-payment",
+      label: "Match order to payment amount",
+      primitive: "edit",
+      target: "order",
+      field: "netAmount",
+      getValue: (d) => (d.payment?.amount != null ? String(d.payment.amount) : null),
+    },
+    {
+      id: "match-payment-to-order",
+      label: "Match payment to order amount",
+      primitive: "edit",
+      target: "payment",
+      field: "amount",
+      getValue: (d) => (d.order?.netAmount != null ? String(d.order.netAmount) : null),
+    },
+    { id: "accept-variance", label: "Accept the variance", primitive: "note", target: "both", defaultNote: "Amount variance reviewed and accepted." },
+  ],
+  CURRENCY_MISMATCH: [
+    {
+      id: "use-payment-currency",
+      label: "Use the payment's currency",
+      primitive: "edit",
+      target: "order",
+      field: "currency",
+      getValue: (d) => (typeof d.payment?.currency === "string" ? d.payment.currency : null),
+    },
+    {
+      id: "use-order-currency",
+      label: "Use the order's currency",
+      primitive: "edit",
+      target: "payment",
+      field: "currency",
+      getValue: (d) => (typeof d.order?.currency === "string" ? d.order.currency : null),
+    },
+    { id: "accept-variance", label: "Accept the variance", primitive: "note", target: "both", defaultNote: "Currency variance reviewed and accepted." },
+  ],
+  STATUS_MISMATCH: [
+    { id: "reviewed", label: "Mark reviewed", primitive: "note", target: "both", defaultNote: "Status mismatch reviewed and accepted." },
+  ],
+  DUPLICATE_PAYMENT: [
+    { id: "exclude-duplicate", label: "Exclude this duplicate payment", primitive: "exclude", target: "payment" },
+    {
+      id: "refund-pending",
+      label: "Refund pending",
+      primitive: "note",
+      target: "order",
+      defaultNote: "Duplicate charge — refund to be issued outside the system.",
+    },
+  ],
+  UNRESOLVED_REFUND: [
+    { id: "refund-pending", label: "Refund pending", primitive: "note", target: "order", defaultNote: "Refund tracked outside the system." },
+    {
+      id: "not-actually-refunded",
+      label: "Order wasn't actually refunded",
+      primitive: "edit",
+      target: "order",
+      field: "status",
+      getValue: () => "completed",
+    },
+  ],
 };

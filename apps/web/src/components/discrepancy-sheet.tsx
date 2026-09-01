@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { RotateCcw, Sparkles } from "lucide-react";
+import { CheckCheck, RotateCcw, Sparkles } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableRow } from "#/components/ui/table";
 import { Alert, AlertTitle, AlertDescription } from "#/components/ui/alert";
 import { AgentProgress } from "#/components/agent-progress";
 import { ChatPanel, type ChatPanelHandle } from "#/components/chat-panel";
+import { ResolveDiscrepancy } from "#/components/resolve-discrepancy";
 import { useAgentSteps, type StepEvent } from "#/lib/agent-steps";
 import { ApiError, postSSE } from "#/lib/api";
 import { buildDiffRows } from "#/lib/diff";
@@ -23,9 +24,11 @@ import type { Discrepancy, Explanation } from "#/lib/types";
 export function DiscrepancySheet({
   discrepancy,
   onOpenChange,
+  onDiscrepancyUpdated,
 }: {
   discrepancy: Discrepancy | null;
   onOpenChange: (open: boolean) => void;
+  onDiscrepancyUpdated?: (updated: Discrepancy) => void;
 }) {
   const [explanation, setExplanation] = useState<Explanation | null>(null);
   const [explainState, setExplainState] = useState<"idle" | "loading" | "error">("idle");
@@ -104,6 +107,12 @@ export function DiscrepancySheet({
                   {Number(discrepancy.amountAtRisk).toLocaleString(undefined, { style: "currency", currency: "USD" })}{" "}
                   at risk
                 </span>
+                {(discrepancy.order?.resolutionStatus === "resolved" ||
+                  discrepancy.payment?.resolutionStatus === "resolved") && (
+                  <Badge variant="outline" className="gap-1">
+                    <CheckCheck className="size-3" /> Resolved
+                  </Badge>
+                )}
               </div>
               <SheetTitle className="sr-only">Discrepancy detail</SheetTitle>
               <SheetDescription>
@@ -114,6 +123,7 @@ export function DiscrepancySheet({
             <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col px-4">
               <TabsList className="w-full">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="resolve">Resolve</TabsTrigger>
                 <TabsTrigger value="discuss">Discuss</TabsTrigger>
               </TabsList>
 
@@ -194,6 +204,13 @@ export function DiscrepancySheet({
                     </Badge>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="resolve" className="flex flex-col gap-4 overflow-y-auto pb-4">
+                <ResolveDiscrepancy
+                  discrepancy={discrepancy}
+                  onResolved={(updated) => onDiscrepancyUpdated?.(updated)}
+                />
               </TabsContent>
 
               <TabsContent value="discuss" className="min-h-0 flex-1 overflow-hidden pb-4">

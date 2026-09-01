@@ -30,6 +30,7 @@ No company name, real customer data, or real credentials appear anywhere in this
 4. Click **Run reconciliation**. The backend deterministically matches every order to its payment(s) and classifies each pair. No LLM involved in this step. (If you jump straight to the dashboard after uploading without running it, the dashboard notices and offers to run it for you right there, or take you back to the screening report first.)
 5. Land on `/dashboard`: headline figures, a chart of discrepancies by type, and — alongside it, filling the same height rather than squeezed into a corner — an **AI insight** panel: a generated portfolio-level summary of what's driving the risk (not per-row), plus a live **"ask about your data"** chat for open-ended questions across the whole reconciliation ("which discrepancy type has the biggest dollar impact", "what should I prioritize first"). A thin progress indicator (Upload → Screening → Reconcile → Results) runs across the top of both `/upload` and `/dashboard`, so it reads as one flow rather than three unrelated pages.
 6. On `/discrepancies`, filter/search, open any row to see a side-by-side comparison of the order and payment record with the mismatched fields highlighted — not a raw JSON dump. From there, click **Explain** for an LLM-generated plain-language explanation plus a short list of concrete suggested next steps, or switch to **Discuss** for a follow-up chat about that specific discrepancy (e.g. "what should I tell the customer").
+7. On the same row, switch to **Resolve** to actually close it out: pick one of a few type-specific presets (e.g. for an amount mismatch, "match order to payment amount" or the reverse; for a duplicate charge, exclude the extra payment; for a missing payment, write it off or mark it paid outside the system), or add a custom note. Applying one updates the underlying record and its resolution status right away — the list shows a **Resolved** badge, and `/api/discrepancies/:id/unresolve` clears it again if you change your mind (see [Resolving discrepancies](#resolving-discrepancies) for what "undo" does and doesn't cover). An **Export ▾** menu on both `/dashboard` and `/discrepancies` downloads a reconciliation report CSV and the final, edits-applied `orders.csv`/`payments.csv`.
 
 ## Architecture
 
@@ -151,6 +152,20 @@ Running the pipeline against the provided `orders.csv` (185 rows) / `payments.cs
 
 **What this would mean for the business:** the orphan orders and duplicate payments are the two that involve real money at risk today (revenue that may not materialize, and a refund obligation, respectively); the rest are largely data-hygiene issues (case sensitivity, date format drift between the two export formats) that don't move money but would keep causing false alarms on every future reconciliation run until fixed at the source.
 
+## Resolving discrepancies
+
+Explaining a discrepancy doesn't close it — someone still has to decide what to do and act on it. `POST /api/discrepancies/:id/resolve` (`apps/api/src/lib/resolution.ts`) applies one of **three generic primitives** instead of a bespoke mutation per discrepancy type:
+
+- **Edit** a field (order `netAmount`/`currency`/`status`, or payment `amount`/`currency`/`status`) — updates the typed column *and* overlays the same value into that row's stored raw CSV data, so an export immediately reflects it with no extra logic at export time.
+- **Exclude** the order or payment from reconciliation (reuses the same `is_excluded` flag the screening report's "exclude this row" already sets).
+- **Note** — mark resolved with an explanation and no data change, for decisions that aren't a data-correction at all (writing off an unrecoverable missing payment, tracking a refund outside the system).
+
+The frontend (`components/resolve-discrepancy.tsx`) curates 2–3 presets per discrepancy type (`RESOLUTION_PRESETS` in `lib/copy.ts`) built on these three primitives, plus an always-available custom note. This *is* the "AI-guided" part — presets are framed around the same reasoning the Explain panel already gives — but every apply is a human click. **The chat agent never calls this endpoint itself**: giving it a write tool would reverse the "LLM never decides matches" guarantee stated throughout this README, and the agent's tools (`lib/llm/tools.ts`) stay strictly read-only.
+
+Resolution state lives on `orders`/`payments`, not on `reconciliations` — `runReconciliation` fully deletes and recomputes the reconciliations table on every run, so a resolution has to survive that as a workflow label layered on top of the deterministic result, not a claim that the underlying disagreement stopped existing. `POST /api/discrepancies/:id/unresolve` clears that label back to open, but — since there's no edit-history table — it doesn't revert an `edit` action's value change; the UI says so next to the Undo button.
+
+`GET /api/export/report.csv`, `/orders.csv`, and `/payments.csv` (`apps/api/src/routes/export.ts`) turn all of this into files: a combined reconciliation report, and the final `orders.csv`/`payments.csv` regenerated straight from each row's stored raw data (edits already overlaid in place, excluded rows dropped) — literal replacement files, not just a summary.
+
 ## LLM approach
 
 Explanations are generated by a **LangChain tool-calling agent** (`apps/api/src/lib/llm/agent.ts`), not a single prompt stuffed with numbers. The agent has four read-only tools (`apps/api/src/lib/llm/tools.ts`) scoped to the calling user:
@@ -202,6 +217,8 @@ Every tool call and result streams to the frontend live over SSE as it happens (
 - Real pagination on the drill-down table (fine at ~200 rows, wouldn't be at scale).
 - Rate-limiting / cost guardrails around the LLM endpoint — right now nothing stops a user from spamming "regenerate insight" or the chat.
 - Stream chat/explain responses token-by-token instead of waiting for the full reply; would also sidestep the edge-proxy-timeout issue documented above.
+- An edit-history table so `unresolve` can actually revert an `edit` action's value change, not just the workflow marker.
+- Bulk resolve (apply one preset across every discrepancy of a type at once) — today it's one row at a time, same as Explain before this session's carousel added a multi-row flow for screening flags.
 
 ## AI tool usage note
 

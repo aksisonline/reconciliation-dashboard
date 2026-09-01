@@ -21,7 +21,8 @@ export const openApiSpec = {
     { name: "Data", description: "Current dataset status; wipe and start over" },
     { name: "Reconciliation", description: "Deterministic order↔payment matching — no LLM involved" },
     { name: "Dashboard", description: "Headline figures, AI insight, whole-reconciliation chat" },
-    { name: "Discrepancies", description: "Drill-down list/detail, Explain, per-discrepancy chat" },
+    { name: "Discrepancies", description: "Drill-down list/detail, Explain, per-discrepancy chat, resolve" },
+    { name: "Export", description: "Final resolved data files — report + regenerated orders/payments CSVs" },
   ],
   components: {
     securitySchemes: {
@@ -89,6 +90,38 @@ export const openApiSpec = {
             properties: { type: { const: "tool_result" }, name: { type: "string" }, result: { type: "string" } },
           },
           { type: "object", properties: { type: { const: "compiling" } } },
+        ],
+      },
+      ResolveAction: {
+        description:
+          "One of three primitives, generic across all 7 discrepancy types: edit a field (also " +
+          "overlays the original raw CSV row so exports reflect it), exclude a row from " +
+          "reconciliation (reuses is_excluded), or mark resolved with a note and no data change.",
+        oneOf: [
+          {
+            type: "object",
+            properties: {
+              kind: { const: "edit" },
+              target: { type: "string", enum: ["order", "payment"] },
+              field: { type: "string", description: "orders: netAmount/currency/status — payments: amount/currency/status" },
+              value: { type: "string" },
+            },
+            required: ["kind", "target", "field", "value"],
+          },
+          {
+            type: "object",
+            properties: { kind: { const: "exclude" }, target: { type: "string", enum: ["order", "payment"] } },
+            required: ["kind", "target"],
+          },
+          {
+            type: "object",
+            properties: {
+              kind: { const: "note" },
+              target: { type: "string", enum: ["order", "payment", "both"] },
+              note: { type: "string" },
+            },
+            required: ["kind", "target", "note"],
+          },
         ],
       },
     },
@@ -353,6 +386,59 @@ export const openApiSpec = {
           },
           "404": { description: "Not found" },
         },
+      },
+    },
+    "/api/discrepancies/{id}/resolve": {
+      post: {
+        tags: ["Discrepancies"],
+        summary: "Apply a resolution (edit/exclude/note) to one discrepancy",
+        description:
+          "The AI chat is advisory-only and never calls this — a human always picks the action and clicks " +
+          "Apply. Presets shown in the UI are just pre-filled ResolveAction payloads.",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { action: { $ref: "#/components/schemas/ResolveAction" } }, required: ["action"] } } },
+        },
+        responses: {
+          "200": { description: "Updated discrepancy (same shape as GET /api/discrepancies/{id})" },
+          "400": { description: "Invalid action (e.g. unknown field, no row on that side, empty note)" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/discrepancies/{id}/unresolve": {
+      post: {
+        tags: ["Discrepancies"],
+        summary: "Clear the resolved marker back to open",
+        description:
+          "Reverts the workflow status only — an `edit` action's value change is not undone (no edit-history table).",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Updated discrepancy" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/export/report.csv": {
+      get: {
+        tags: ["Export"],
+        summary: "Reconciliation report — one row per discrepancy/match plus its resolution",
+        responses: { "200": { description: "text/csv", content: { "text/csv": { schema: { type: "string" } } } } },
+      },
+    },
+    "/api/export/orders.csv": {
+      get: {
+        tags: ["Export"],
+        summary: "Final orders.csv — original rows with any edits overlaid, excluded rows dropped",
+        responses: { "200": { description: "text/csv", content: { "text/csv": { schema: { type: "string" } } } } },
+      },
+    },
+    "/api/export/payments.csv": {
+      get: {
+        tags: ["Export"],
+        summary: "Final payments.csv — original rows with any edits overlaid, excluded rows dropped",
+        responses: { "200": { description: "text/csv", content: { "text/csv": { schema: { type: "string" } } } } },
       },
     },
   },

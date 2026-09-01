@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRight, RefreshCcw, ShieldCheck } from "lucide-react
 import { AuthGuard } from "#/components/auth-guard";
 import { FlowProgress, currentStage } from "#/components/flow-progress";
 import { DashboardAiPanel } from "#/components/dashboard-ai-panel";
+import { ExportMenu } from "#/components/export-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
@@ -16,7 +17,7 @@ import type { DashboardSummary, DataStatus } from "#/lib/types";
 
 export const Route = createFileRoute("/dashboard")({
   component: () => (
-    <AuthGuard title="Dashboard" fillHeight>
+    <AuthGuard title="Dashboard" fillHeight actions={<ExportMenu />}>
       <Dashboard />
     </AuthGuard>
   ),

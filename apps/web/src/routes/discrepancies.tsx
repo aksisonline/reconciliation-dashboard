@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Search, ShieldCheck } from "lucide-react";
+import { CheckCheck, Search, ShieldCheck } from "lucide-react";
 import { AuthGuard } from "#/components/auth-guard";
 import { Input } from "#/components/ui/input";
 import { Badge } from "#/components/ui/badge";
@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "#
 import { Skeleton } from "#/components/ui/skeleton";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { DiscrepancySheet } from "#/components/discrepancy-sheet";
+import { ExportMenu } from "#/components/export-menu";
 import { api, ApiError } from "#/lib/api";
 import { DISCREPANCY_COPY } from "#/lib/copy";
 import type { Discrepancy, DiscrepancyType } from "#/lib/types";
 
 export const Route = createFileRoute("/discrepancies")({
   component: () => (
-    <AuthGuard title="Discrepancies">
+    <AuthGuard title="Discrepancies" actions={<ExportMenu />}>
       <DiscrepanciesPage />
     </AuthGuard>
   ),
@@ -109,29 +110,47 @@ function DiscrepanciesPage() {
                 <TableHead>Order</TableHead>
                 <TableHead>Payment</TableHead>
                 <TableHead className="text-right">Amount at risk</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((r) => (
-                <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                  <TableCell>
-                    <Badge variant="destructive">
-                      {r.discrepancyType ? DISCREPANCY_COPY[r.discrepancyType].label : r.discrepancyType}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{r.order?.orderId ?? "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.payment?.transactionRef ?? "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {Number(r.amountAtRisk).toLocaleString(undefined, { style: "currency", currency: "USD" })}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {rows.map((r) => {
+                const isResolved = r.order?.resolutionStatus === "resolved" || r.payment?.resolutionStatus === "resolved";
+                return (
+                  <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
+                    <TableCell>
+                      <Badge variant="destructive">
+                        {r.discrepancyType ? DISCREPANCY_COPY[r.discrepancyType].label : r.discrepancyType}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{r.order?.orderId ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{r.payment?.transactionRef ?? "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {Number(r.amountAtRisk).toLocaleString(undefined, { style: "currency", currency: "USD" })}
+                    </TableCell>
+                    <TableCell>
+                      {isResolved && (
+                        <Badge variant="outline" className="gap-1">
+                          <CheckCheck className="size-3" /> Resolved
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
       </div>
 
-      <DiscrepancySheet discrepancy={selected} onOpenChange={(open) => !open && setSelected(null)} />
+      <DiscrepancySheet
+        discrepancy={selected}
+        onOpenChange={(open) => !open && setSelected(null)}
+        onDiscrepancyUpdated={(updated) => {
+          setSelected(updated);
+          setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+        }}
+      />
     </div>
   );
 }

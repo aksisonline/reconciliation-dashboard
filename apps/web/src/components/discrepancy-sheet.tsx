@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { CheckCheck, RotateCcw, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CheckCheck, ChevronLeft, ChevronRight, RotateCcw, Sparkles } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -25,10 +25,17 @@ export function DiscrepancySheet({
   discrepancy,
   onOpenChange,
   onDiscrepancyUpdated,
+  onNavigate,
+  navIndex,
+  navTotal,
 }: {
   discrepancy: Discrepancy | null;
   onOpenChange: (open: boolean) => void;
   onDiscrepancyUpdated?: (updated: Discrepancy) => void;
+  /** Step to the previous/next row in the current filtered list without closing the sheet. */
+  onNavigate?: (direction: "prev" | "next") => void;
+  navIndex?: number;
+  navTotal?: number;
 }) {
   const [explanation, setExplanation] = useState<Explanation | null>(null);
   const [explainState, setExplainState] = useState<"idle" | "loading" | "error">("idle");
@@ -36,6 +43,29 @@ export function DiscrepancySheet({
   const [tab, setTab] = useState("overview");
   const chatRef = useRef<ChatPanelHandle>(null);
   const { calls, compiling, handle: handleStep, reset: resetSteps } = useAgentSteps();
+
+  // Navigating to a different discrepancy (prev/next) keeps the sheet open — reset the
+  // per-discrepancy transient state (explanation, tab) so the new row doesn't show stale data
+  // left over from whichever one was open before.
+  useEffect(() => {
+    setExplanation(null);
+    setExplainState("idle");
+    setExplainError(null);
+    setTab("overview");
+  }, [discrepancy?.id]);
+
+  useEffect(() => {
+    if (!discrepancy || !onNavigate) return;
+    function onKey(e: KeyboardEvent) {
+      // Don't hijack arrow keys while the user is typing (note textarea, chat input, etc).
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "ArrowLeft") onNavigate?.("prev");
+      else if (e.key === "ArrowRight") onNavigate?.("next");
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [discrepancy, onNavigate]);
 
   async function requestExplanation(id: string): Promise<Explanation> {
     let got: Explanation | null = null;
@@ -112,6 +142,33 @@ export function DiscrepancySheet({
                   <Badge variant="outline" className="gap-1">
                     <CheckCheck className="size-3" /> Resolved
                   </Badge>
+                )}
+                {onNavigate && (
+                  <div className="ml-auto flex items-center gap-1 pr-6">
+                    {navIndex !== undefined && navTotal !== undefined && (
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {navIndex + 1} of {navTotal}
+                      </span>
+                    )}
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => onNavigate("prev")}
+                      disabled={navIndex === undefined || navIndex <= 0}
+                      title="Previous (←)"
+                    >
+                      <ChevronLeft />
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={() => onNavigate("next")}
+                      disabled={navIndex === undefined || navTotal === undefined || navIndex >= navTotal - 1}
+                      title="Next (→)"
+                    >
+                      <ChevronRight />
+                    </Button>
+                  </div>
                 )}
               </div>
               <SheetTitle className="sr-only">Discrepancy detail</SheetTitle>

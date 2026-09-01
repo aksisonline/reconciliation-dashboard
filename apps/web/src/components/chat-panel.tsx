@@ -118,7 +118,11 @@ export const ChatPanel = forwardRef<
               {/* A fixed reading-width column, centered — Bubble caps at 80% of its parent, so on a
                   very wide parent (the panel expanded to near-fullscreen) an unconstrained parent
                   left bubbles pinned to the left edge with a large empty gap on the right. */}
-              <MessageScrollerContent className="mx-auto w-full max-w-3xl">
+              {/* pb-8 gives the bottom scroll-fade mask (a permanent ~2rem faded band at the
+                  viewport's bottom edge, not just while scrolling) empty space to fade into —
+                  without it, that band fades straight into the last message's own text and
+                  there's nothing left to scroll to reveal it. */}
+              <MessageScrollerContent className="mx-auto w-full max-w-3xl pb-8">
                 {leading && (
                   <MessageScrollerItem>
                     <Message align="start">

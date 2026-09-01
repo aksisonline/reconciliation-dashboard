@@ -142,8 +142,12 @@ export function DashboardAiPanel() {
       )}
       <Card
         className={cn(
-          "flex h-full min-h-0 flex-col overflow-hidden py-0",
-          expanded && "fixed inset-4 z-50 shadow-2xl md:inset-10",
+          "flex min-h-0 flex-col overflow-hidden py-0",
+          // `h-full` + `inset-*` together over-constrain a fixed-position box (top/bottom AND
+          // an explicit height all set) — height wins, so the card renders taller than the
+          // viewport gap between the insets and the input bar gets pushed off-screen. Only one
+          // of the two should apply at a time.
+          expanded ? "fixed inset-4 z-50 shadow-2xl md:inset-10" : "h-full",
         )}
       >
         <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">

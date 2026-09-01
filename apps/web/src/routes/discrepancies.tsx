@@ -150,6 +150,14 @@ function DiscrepanciesPage() {
           setSelected(updated);
           setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
         }}
+        onNavigate={(direction) => {
+          const i = selected ? rows.findIndex((r) => r.id === selected.id) : -1;
+          if (i === -1) return;
+          const next = rows[direction === "prev" ? i - 1 : i + 1];
+          if (next) setSelected(next);
+        }}
+        navIndex={selected ? rows.findIndex((r) => r.id === selected.id) : undefined}
+        navTotal={rows.length}
       />
     </div>
   );

@@ -44,8 +44,19 @@ const MAX_TOOL_ITERATIONS = 4;
 
 type ChatMessage = SystemMessage | HumanMessage | AIMessage | ToolMessage;
 
+/** Progress events emitted while the agent works, so the UI can show what it's doing
+ * instead of a plain "thinking" spinner. */
+export type AgentStep =
+  | { type: "tool_call"; name: string; args: unknown }
+  | { type: "tool_result"; name: string; result: string };
+
 /** Runs the bind-tools / call-tools loop until the model stops calling tools. */
-async function runToolLoop(tx: Tx, userId: string, messages: ChatMessage[]): Promise<ChatMessage[]> {
+async function runToolLoop(
+  tx: Tx,
+  userId: string,
+  messages: ChatMessage[],
+  onStep?: (step: AgentStep) => void,
+): Promise<ChatMessage[]> {
   const tools = buildTools(tx, userId);
   const model = client().bindTools(tools);
   const toolsByName = new Map(tools.map((t) => [t.name, t]));
@@ -57,8 +68,10 @@ async function runToolLoop(tx: Tx, userId: string, messages: ChatMessage[]): Pro
     if (!response.tool_calls || response.tool_calls.length === 0) break;
 
     for (const call of response.tool_calls) {
+      onStep?.({ type: "tool_call", name: call.name, args: call.args });
       const t = toolsByName.get(call.name) as { invoke: (args: unknown) => Promise<unknown> } | undefined;
       const result = t ? await t.invoke(call.args) : `Unknown tool: ${call.name}`;
+      onStep?.({ type: "tool_result", name: call.name, result: String(result) });
       messages.push(new ToolMessage({ content: String(result), tool_call_id: call.id ?? "" }));
     }
   }
@@ -125,6 +138,7 @@ async function runChat(
   systemPrompt: string,
   contextLine: string | null,
   history: ChatTurn[],
+  onStep?: (step: AgentStep) => void,
 ): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -133,7 +147,7 @@ async function runChat(
         ...(contextLine ? [new HumanMessage(contextLine)] : []),
         ...history.map((t) => (t.role === "user" ? new HumanMessage(t.content) : new AIMessage(t.content))),
       ];
-      const messages = await runToolLoop(tx, userId, seed);
+      const messages = await runToolLoop(tx, userId, seed, onStep);
       const last = messages[messages.length - 1];
 
       // The loop can exhaust its iteration budget right after a tool call,
@@ -165,8 +179,21 @@ async function runChat(
 }
 
 /** One conversational reply about a specific discrepancy, given prior turns for context. */
-export async function chatReply(tx: Tx, userId: string, reconciliationId: string, history: ChatTurn[]) {
-  return runChat(tx, userId, CHAT_SYSTEM_PROMPT, `The discrepancy id for this conversation is ${reconciliationId}.`, history);
+export async function chatReply(
+  tx: Tx,
+  userId: string,
+  reconciliationId: string,
+  history: ChatTurn[],
+  onStep?: (step: AgentStep) => void,
+) {
+  return runChat(
+    tx,
+    userId,
+    CHAT_SYSTEM_PROMPT,
+    `The discrepancy id for this conversation is ${reconciliationId}.`,
+    history,
+    onStep,
+  );
 }
 
 const DASHBOARD_CHAT_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
@@ -177,6 +204,11 @@ any fact or number. Keep replies short and conversational, a few sentences unles
 You may use light markdown (bold, short lists) — it will be rendered.`;
 
 /** One conversational reply about the whole reconciliation (dashboard-level chat, not scoped to one discrepancy). */
-export async function dashboardChatReply(tx: Tx, userId: string, history: ChatTurn[]) {
-  return runChat(tx, userId, DASHBOARD_CHAT_SYSTEM_PROMPT, null, history);
+export async function dashboardChatReply(
+  tx: Tx,
+  userId: string,
+  history: ChatTurn[],
+  onStep?: (step: AgentStep) => void,
+) {
+  return runChat(tx, userId, DASHBOARD_CHAT_SYSTEM_PROMPT, null, history, onStep);
 }

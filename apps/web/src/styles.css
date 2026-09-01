@@ -215,3 +215,22 @@ body {
   background: none;
   padding: 0;
 }
+.chat-markdown table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.5em 0;
+  border-collapse: collapse;
+  font-size: 0.8125em;
+}
+.chat-markdown th,
+.chat-markdown td {
+  border: 1px solid var(--border);
+  padding: 0.35em 0.6em;
+  text-align: left;
+  white-space: nowrap;
+}
+.chat-markdown thead {
+  background: color-mix(in oklch, var(--foreground) 6%, transparent);
+}

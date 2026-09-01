@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { asc, count, eq } from "drizzle-orm";
 import type { AppEnv } from "../types";
 import { withUserContext } from "../db/withUserContext";
@@ -139,20 +140,28 @@ dashboardRoutes.post("/chat/messages", async (c) => {
     return prior.map((m): ChatTurn => ({ role: m.role, content: m.content }));
   });
 
-  const result = await withUserContext(userId, (tx) =>
-    dashboardChatReply(tx, userId, [...history, { role: "user", content }]),
-  );
+  return streamSSE(c, async (stream) => {
+    const result = await withUserContext(userId, (tx) =>
+      dashboardChatReply(tx, userId, [...history, { role: "user", content }], (step) =>
+        stream.writeSSE({ event: "step", data: JSON.stringify(step) }),
+      ),
+    );
 
-  if (!result.ok) {
-    return c.json({ error: "reply_unavailable", detail: result.error }, 502);
-  }
+    if (!result.ok) {
+      await stream.writeSSE({ event: "error", data: JSON.stringify({ error: result.error }) });
+      return;
+    }
 
-  const [saved] = await withUserContext(userId, (tx) =>
-    tx
-      .insert(schema.dashboardChatMessages)
-      .values({ userId, role: "assistant", content: result.reply })
-      .returning(),
-  );
+    const [saved] = await withUserContext(userId, (tx) =>
+      tx
+        .insert(schema.dashboardChatMessages)
+        .values({ userId, role: "assistant", content: result.reply })
+        .returning(),
+    );
 
-  return c.json({ message: { ...saved, contentHtml: renderMarkdown(saved.content) } });
+    await stream.writeSSE({
+      event: "final",
+      data: JSON.stringify({ message: { ...saved, contentHtml: renderMarkdown(saved.content) } }),
+    });
+  });
 });

@@ -47,9 +47,21 @@ export function DashboardAiPanel() {
     }
   }
 
+  const noInsightYet = loaded && !insight && state === "idle";
+  const generateButton = (
+    <Button size="sm" onClick={generate}>
+      <Sparkles /> Generate insight
+    </Button>
+  );
+
   // Rendered as the first bubble in the chat feed itself (see ChatPanel's `leading` prop) —
   // one continuous conversation instead of a boxed-off "insight" section above a divider.
-  const insightBubble = !loaded ? (
+  // The "no insight yet" case is the exception: it's handed to `emptyAction` instead, so it
+  // shows as a centered opener on the blank chat rather than a bubble pinned to the top —
+  // this fallback only appears if the user starts chatting before generating one.
+  const insightBubble = noInsightYet ? (
+    generateButton
+  ) : !loaded ? (
     <span className="text-sm text-muted-foreground">Loading…</span>
   ) : state === "loading" ? (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -62,28 +74,26 @@ export function DashboardAiPanel() {
         Retry
       </Button>
     </div>
-  ) : insight ? (
-    <div className="flex flex-col gap-2.5">
-      <p className="text-sm leading-relaxed">{insight.likely_cause}</p>
-      <p className="text-sm leading-relaxed text-muted-foreground">{insight.recommended_action}</p>
-      {insight.suggested_actions && insight.suggested_actions.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          {insight.suggested_actions.map((action, i) => (
-            <Badge key={i} variant="secondary" className="h-auto w-full min-w-0 justify-start py-1 text-left font-normal">
-              <Sparkles className="shrink-0 opacity-60" />
-              <span className="min-w-0 flex-1 text-wrap">{action}</span>
-            </Badge>
-          ))}
-        </div>
-      )}
-      <Badge variant="outline" className="w-fit capitalize">
-        Confidence: {insight.confidence}
-      </Badge>
-    </div>
   ) : (
-    <Button size="sm" onClick={generate}>
-      <Sparkles /> Generate insight
-    </Button>
+    insight && (
+      <div className="flex flex-col gap-2.5">
+        <p className="text-sm leading-relaxed">{insight.likely_cause}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">{insight.recommended_action}</p>
+        {insight.suggested_actions && insight.suggested_actions.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            {insight.suggested_actions.map((action, i) => (
+              <Badge key={i} variant="secondary" className="h-auto w-full min-w-0 justify-start py-1 text-left font-normal">
+                <Sparkles className="shrink-0 opacity-60" />
+                <span className="min-w-0 flex-1 text-wrap">{action}</span>
+              </Badge>
+            ))}
+          </div>
+        )}
+        <Badge variant="outline" className="w-fit capitalize">
+          Confidence: {insight.confidence}
+        </Badge>
+      </div>
+    )
   );
 
   return (
@@ -105,6 +115,7 @@ export function DashboardAiPanel() {
           endpoint="/api/dashboard/chat"
           placeholder='Ask about your data — e.g. "which discrepancy has the biggest dollar impact?"'
           leading={insightBubble}
+          emptyAction={noInsightYet ? generateButton : undefined}
         />
       </div>
     </Card>

@@ -13,7 +13,7 @@ import { Bubble, BubbleContent } from "#/components/ui/bubble";
 import { Input } from "#/components/ui/input";
 import { Button } from "#/components/ui/button";
 import { Spinner } from "#/components/ui/spinner";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "#/components/ui/empty";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia } from "#/components/ui/empty";
 import { api, ApiError, postSSE } from "#/lib/api";
 import type { ChatMessage } from "#/lib/types";
 
@@ -30,15 +30,19 @@ type ToolCall = { name: string; done: boolean };
  * Discuss tab and the dashboard-level "ask about your data" chat. `endpoint` is the base
  * path; `${endpoint}/messages` is fetched/posted to. `leading`, when given, renders as the
  * first bubble in the same scrolling feed (used to fold the dashboard's AI insight into the
- * chat itself instead of showing it in a separate boxed-off section). */
+ * chat itself instead of showing it in a separate boxed-off section). `emptyAction`, when
+ * given, renders as a centered call-to-action in the empty state (before there's anything to
+ * scroll) instead of `leading` sitting awkwardly at the top of an otherwise blank feed. */
 export function ChatPanel({
   endpoint,
   placeholder,
   leading,
+  emptyAction,
 }: {
   endpoint: string;
   placeholder: string;
   leading?: ReactNode;
+  emptyAction?: ReactNode;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -110,8 +114,10 @@ export function ChatPanel({
   }
 
   // A `leading` bubble (the dashboard's AI insight) counts as content on its own, so the
-  // generic empty state only shows when there's truly nothing — no insight, no messages yet.
-  const showEmptyState = loaded && messages.length === 0 && !sending && !leading;
+  // empty state only shows when there's truly nothing yet — no messages, and either no
+  // leading content or an explicit emptyAction (a "Generate insight" opener) to show instead.
+  const isEmptyOfMessages = loaded && messages.length === 0 && !sending;
+  const showEmptyState = isEmptyOfMessages && (!!emptyAction || !leading);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -123,6 +129,7 @@ export function ChatPanel({
             </EmptyMedia>
             <EmptyDescription>{placeholder}</EmptyDescription>
           </EmptyHeader>
+          {emptyAction && <EmptyContent>{emptyAction}</EmptyContent>}
         </Empty>
       ) : (
         <MessageScrollerProvider>

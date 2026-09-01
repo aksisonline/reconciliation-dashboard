@@ -19,6 +19,7 @@ No company name, real customer data, or real credentials appear anywhere in this
 
 - **App**: https://web-production-e8c73.up.railway.app
 - **API**: https://api-production-4c28.up.railway.app
+- **API docs**: https://api-production-4c28.up.railway.app/docs (Scalar, reading `/openapi.json` — hand-authored, not generated from the routes, so treat it as a map rather than a contract)
 - **Test login**: `smoketest3@example.com` / `correcthorsebattery` — already has both CSVs uploaded and reconciled, so the dashboard has data immediately. Or sign up your own account.
 
 ## How it works, end to end

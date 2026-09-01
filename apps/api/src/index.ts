@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { apiReference } from "@scalar/hono-api-reference";
 import type { AppEnv } from "./types";
 import { auth } from "./lib/auth";
 import { requireSession } from "./lib/session";
+import { openApiSpec } from "./openapi";
 import { ingestRoutes } from "./routes/ingest";
 import { dataRoutes } from "./routes/data";
 import { reconcileRoutes } from "./routes/reconcile";
@@ -23,7 +25,10 @@ app.use(
   }),
 );
 
+app.get("/", (c) => c.text("API is healthy. For docs, go to /docs"));
 app.get("/health", (c) => c.json({ ok: true }));
+app.get("/openapi.json", (c) => c.json(openApiSpec));
+app.get("/docs", apiReference({ url: "/openapi.json", pageTitle: "Reconciliation Dashboard API" }));
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 

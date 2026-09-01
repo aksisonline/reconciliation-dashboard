@@ -4,6 +4,7 @@ import { useSession } from "#/lib/auth-client";
 import { AppSidebar } from "#/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/sidebar";
 import { Separator } from "#/components/ui/separator";
+import { cn } from "#/lib/utils";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -15,10 +16,13 @@ export function AuthGuard({
   title,
   actions,
   children,
+  fillHeight,
 }: {
   title: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  /** Page manages its own height/scrolling (e.g. dashboard) instead of the page growing naturally. */
+  fillHeight?: boolean;
 }) {
   const { data: session, isPending } = useSession();
   const navigate = useNavigate();
@@ -50,7 +54,9 @@ export function AuthGuard({
           </Breadcrumb>
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">{children}</div>
+        <div className={cn("flex flex-1 flex-col gap-4 p-4 md:p-6", fillHeight && "min-h-0 overflow-hidden")}>
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

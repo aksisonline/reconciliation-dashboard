@@ -32,6 +32,11 @@ function client() {
     temperature: 0.2,
     apiKey: process.env.LLM_API_KEY,
     configuration: { baseURL: process.env.LLM_BASE_URL },
+    // Bounds every call so a slow provider response fails fast into the
+    // retry/fallback path instead of hanging — a hung request past the
+    // platform's own edge-proxy timeout was observed getting silently
+    // retried at the infra layer, multiplying LLM spend for one click.
+    timeout: 25_000,
   });
 }
 
@@ -113,23 +118,41 @@ You may use light markdown (bold, short lists) — it will be rendered.`;
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 
-/** One conversational reply, given prior turns for context. Same tools, same guardrails as explain(). */
-export async function chatReply(
+/** Shared chat loop: seed system prompt + optional context line + prior turns, run tools, return the reply. */
+async function runChat(
   tx: Tx,
   userId: string,
-  reconciliationId: string,
+  systemPrompt: string,
+  contextLine: string | null,
   history: ChatTurn[],
 ): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const seed: ChatMessage[] = [
-        new SystemMessage(CHAT_SYSTEM_PROMPT),
-        new HumanMessage(`The discrepancy id for this conversation is ${reconciliationId}.`),
+        new SystemMessage(systemPrompt),
+        ...(contextLine ? [new HumanMessage(contextLine)] : []),
         ...history.map((t) => (t.role === "user" ? new HumanMessage(t.content) : new AIMessage(t.content))),
       ];
       const messages = await runToolLoop(tx, userId, seed);
       const last = messages[messages.length - 1];
-      const text = typeof last.content === "string" ? last.content : JSON.stringify(last.content);
+
+      // The loop can exhaust its iteration budget right after a tool call,
+      // leaving a raw ToolMessage (JSON) as the last entry instead of a
+      // synthesized reply. Force one final untooled call in that case rather
+      // than ever showing the user raw tool output.
+      const lastIsUsableReply =
+        last instanceof AIMessage && typeof last.content === "string" && last.content.trim().length > 0;
+      const text = lastIsUsableReply
+        ? (last.content as string)
+        : String(
+            (
+              await client().invoke([
+                ...messages,
+                new HumanMessage("Based on everything above, give your final answer now in plain conversational text — no more tool calls."),
+              ])
+            ).content,
+          );
+
       if (!text.trim()) throw new Error("Model returned an empty reply");
       return { ok: true, reply: text };
     } catch (err) {
@@ -139,4 +162,21 @@ export async function chatReply(
     }
   }
   return { ok: false, error: "LLM call failed" };
+}
+
+/** One conversational reply about a specific discrepancy, given prior turns for context. */
+export async function chatReply(tx: Tx, userId: string, reconciliationId: string, history: ChatTurn[]) {
+  return runChat(tx, userId, CHAT_SYSTEM_PROMPT, `The discrepancy id for this conversation is ${reconciliationId}.`, history);
+}
+
+const DASHBOARD_CHAT_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
+You are now in a follow-up conversation about the user's whole reconciliation (not one specific discrepancy).
+The user may ask about totals, comparisons across discrepancy types, priorities, or general "what should I do
+next" questions — use the tools (getSummaryTotals, getDiscrepanciesByType, getDiscrepancy, compareAmounts) for
+any fact or number. Keep replies short and conversational, a few sentences unless more detail is asked for.
+You may use light markdown (bold, short lists) — it will be rendered.`;
+
+/** One conversational reply about the whole reconciliation (dashboard-level chat, not scoped to one discrepancy). */
+export async function dashboardChatReply(tx: Tx, userId: string, history: ChatTurn[]) {
+  return runChat(tx, userId, DASHBOARD_CHAT_SYSTEM_PROMPT, null, history);
 }

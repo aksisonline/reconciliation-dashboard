@@ -15,7 +15,10 @@ import { Button } from "#/components/ui/button";
 import { api, ApiError } from "#/lib/api";
 import type { ChatMessage } from "#/lib/types";
 
-export function DiscrepancyChat({ reconciliationId }: { reconciliationId: string }) {
+/** Generic "ask a question, get a reply" chat panel — used for both the per-discrepancy
+ * Discuss tab and the dashboard-level "ask about your data" chat. `endpoint` is the base
+ * path; `${endpoint}/messages` is fetched/posted to. */
+export function ChatPanel({ endpoint, placeholder }: { endpoint: string; placeholder: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -26,13 +29,13 @@ export function DiscrepancyChat({ reconciliationId }: { reconciliationId: string
   useEffect(() => {
     let cancelled = false;
     api
-      .get<{ messages: ChatMessage[] }>(`/api/discrepancies/${reconciliationId}/messages`)
+      .get<{ messages: ChatMessage[] }>(`${endpoint}/messages`)
       .then((res) => !cancelled && setMessages(res.messages))
       .finally(() => !cancelled && setLoaded(true));
     return () => {
       cancelled = true;
     };
-  }, [reconciliationId]);
+  }, [endpoint]);
 
   async function send() {
     const content = draft.trim();
@@ -46,9 +49,7 @@ export function DiscrepancyChat({ reconciliationId }: { reconciliationId: string
     ]);
 
     try {
-      const res = await api.post<{ message: ChatMessage }>(`/api/discrepancies/${reconciliationId}/messages`, {
-        content,
-      });
+      const res = await api.post<{ message: ChatMessage }>(`${endpoint}/messages`, { content });
       setMessages((prev) => [...prev, res.message]);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't get a reply. Try again.");
@@ -67,10 +68,7 @@ export function DiscrepancyChat({ reconciliationId }: { reconciliationId: string
               {!loaded ? (
                 <p className="p-4 text-sm text-muted-foreground">Loading conversation…</p>
               ) : messages.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  Ask a follow-up — e.g. "what should I tell the customer" or "how does this compare to similar
-                  cases".
-                </p>
+                <p className="p-4 text-sm text-muted-foreground">{placeholder}</p>
               ) : (
                 messages.map((m) => (
                   <MessageScrollerItem key={m.id}>

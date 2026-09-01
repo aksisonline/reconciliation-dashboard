@@ -24,6 +24,7 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { CompareRowsDialog } from "#/components/compare-rows-dialog";
+import { FlowProgress } from "#/components/flow-progress";
 import { api, ApiError } from "#/lib/api";
 import { FLAG_COPY } from "#/lib/copy";
 import type { DataStatus, IngestionFlag } from "#/lib/types";
@@ -133,6 +134,8 @@ function UploadPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+      <FlowProgress status={status} />
+
       <Card>
         <CardHeader>
           <CardTitle>Current data</CardTitle>

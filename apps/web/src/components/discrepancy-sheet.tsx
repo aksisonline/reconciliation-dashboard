@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { Table, TableBody, TableCell, TableRow } from "#/components/ui/table";
 import { Alert, AlertTitle, AlertDescription } from "#/components/ui/alert";
 import { Spinner } from "#/components/ui/spinner";
-import { DiscrepancyChat } from "#/components/discrepancy-chat";
+import { ChatPanel } from "#/components/chat-panel";
 import { api, ApiError } from "#/lib/api";
 import { buildDiffRows } from "#/lib/diff";
 import { DISCREPANCY_COPY } from "#/lib/copy";
@@ -38,6 +38,16 @@ export function DiscrepancySheet({
       setExplanation(res.explanation);
       setExplainState("idle");
     } catch (err) {
+      // The call can outlast an edge proxy's own timeout even though it
+      // finished server-side; a retry is cheap since it hits the cache.
+      try {
+        const retry = await api.post<{ explanation: Explanation }>(`/api/discrepancies/${id}/explain`);
+        setExplanation(retry.explanation);
+        setExplainState("idle");
+        return;
+      } catch {
+        // fall through to the original error below
+      }
       setExplainState("error");
       setExplainError(err instanceof ApiError ? err.message : "Explanation unavailable right now.");
     }
@@ -149,7 +159,10 @@ export function DiscrepancySheet({
               </TabsContent>
 
               <TabsContent value="discuss" className="min-h-0 flex-1 pb-4">
-                <DiscrepancyChat reconciliationId={discrepancy.id} />
+                <ChatPanel
+                  endpoint={`/api/discrepancies/${discrepancy.id}`}
+                  placeholder='Ask a follow-up — e.g. "what should I tell the customer" or "how does this compare to similar cases".'
+                />
               </TabsContent>
             </Tabs>
           </>

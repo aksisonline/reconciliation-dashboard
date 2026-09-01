@@ -193,3 +193,27 @@ export const discrepancyChatMessages = pgTable("discrepancy_chat_messages", {
   content: text("content").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+/** Portfolio-level "what's going on across all my discrepancies" summary, shown on the
+ * dashboard. One row per user — regenerating replaces it rather than accumulating history. */
+export const dashboardInsights = pgTable("dashboard_insights", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  structured: jsonb("structured").notNull(),
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/** General "ask about your data" chat on the dashboard — not tied to one discrepancy. */
+export const dashboardChatMessages = pgTable("dashboard_chat_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  role: chatRoleEnum("role").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

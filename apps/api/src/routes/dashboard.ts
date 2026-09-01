@@ -1,8 +1,10 @@
 import { Hono } from "hono";
-import { count, eq } from "drizzle-orm";
+import { asc, count, eq } from "drizzle-orm";
 import type { AppEnv } from "../types";
 import { withUserContext } from "../db/withUserContext";
 import * as schema from "../db/schema";
+import { explainWithFallback, dashboardChatReply, type ChatTurn } from "../lib/llm/agent";
+import { renderMarkdown } from "../lib/markdown";
 
 export const dashboardRoutes = new Hono<AppEnv>();
 
@@ -71,3 +73,86 @@ dashboardRoutes.get("/summary", async (c) => {
 function round2(n: number) {
   return Number(n.toFixed(2));
 }
+
+const INSIGHT_QUESTION =
+  "Summarize this user's whole reconciliation for a revenue owner. Call getSummaryTotals exactly once — it " +
+  "already includes a byType breakdown with both count and amountAtRisk per discrepancy type, which is " +
+  "everything you need; do not call getDiscrepanciesByType or getDiscrepancy for this. Call out the " +
+  "highest-impact discrepancy types by dollar amount, not just count, and give suggested next steps that " +
+  "apply across the reconciliation as a whole (not one single row).";
+
+dashboardRoutes.get("/insight", async (c) => {
+  const userId = c.get("userId");
+  const [row] = await withUserContext(userId, (tx) =>
+    tx.select().from(schema.dashboardInsights).where(eq(schema.dashboardInsights.userId, userId)),
+  );
+  return c.json({ insight: row ? row.structured : null, createdAt: row?.createdAt ?? null });
+});
+
+dashboardRoutes.post("/insight", async (c) => {
+  const userId = c.get("userId");
+
+  const result = await withUserContext(userId, (tx) => explainWithFallback(tx, userId, INSIGHT_QUESTION));
+  if (!result.ok) {
+    return c.json({ error: "insight_unavailable", detail: result.error }, 502);
+  }
+
+  await withUserContext(userId, async (tx) => {
+    await tx.delete(schema.dashboardInsights).where(eq(schema.dashboardInsights.userId, userId));
+    await tx.insert(schema.dashboardInsights).values({
+      userId,
+      structured: result.explanation,
+      model: process.env.LLM_MODEL ?? "unknown",
+    });
+  });
+
+  return c.json({ insight: result.explanation, createdAt: new Date().toISOString() });
+});
+
+dashboardRoutes.get("/chat/messages", async (c) => {
+  const userId = c.get("userId");
+  const messages = await withUserContext(userId, (tx) =>
+    tx
+      .select()
+      .from(schema.dashboardChatMessages)
+      .where(eq(schema.dashboardChatMessages.userId, userId))
+      .orderBy(asc(schema.dashboardChatMessages.createdAt)),
+  );
+  return c.json({ messages: messages.map((m) => ({ ...m, contentHtml: renderMarkdown(m.content) })) });
+});
+
+dashboardRoutes.post("/chat/messages", async (c) => {
+  const userId = c.get("userId");
+  const body = await c.req.json<{ content: string }>().catch(() => null);
+  const content = body?.content?.trim();
+  if (!content) return c.json({ error: "content required" }, 400);
+
+  const history = await withUserContext(userId, async (tx) => {
+    const prior = await tx
+      .select()
+      .from(schema.dashboardChatMessages)
+      .where(eq(schema.dashboardChatMessages.userId, userId))
+      .orderBy(asc(schema.dashboardChatMessages.createdAt));
+
+    await tx.insert(schema.dashboardChatMessages).values({ userId, role: "user", content });
+
+    return prior.map((m): ChatTurn => ({ role: m.role, content: m.content }));
+  });
+
+  const result = await withUserContext(userId, (tx) =>
+    dashboardChatReply(tx, userId, [...history, { role: "user", content }]),
+  );
+
+  if (!result.ok) {
+    return c.json({ error: "reply_unavailable", detail: result.error }, 502);
+  }
+
+  const [saved] = await withUserContext(userId, (tx) =>
+    tx
+      .insert(schema.dashboardChatMessages)
+      .values({ userId, role: "assistant", content: result.reply })
+      .returning(),
+  );
+
+  return c.json({ message: { ...saved, contentHtml: renderMarkdown(saved.content) } });
+});
